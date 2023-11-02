@@ -311,8 +311,6 @@ impl CDPHealthChecker {
     pub fn check_cdp(&mut self) -> Result<(), String> {
         self._update_health_check_data()?;
 
-        info!("CDP Health Check: {:?}", self.total_loan_to_value_ratio);
-
         if !(self.total_loan_to_value_ratio < Decimal::ONE) {
             return Err("LTV need to be lower 1".to_string());
         }
@@ -559,7 +557,6 @@ impl CDPHealthChecker {
             total_loan_to_value_ratio = total_loan_value / total_discounted_collateral_value;
         }
 
-        // self.total_solvency_value = total_solvency_value;
         self.self_closable_loan_value = self_closable_loan_value;
 
         self.total_loan_value = total_loan_value;

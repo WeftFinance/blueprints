@@ -17,6 +17,7 @@ pub struct BatchFlashloanTerm {
 
 #[derive(ScryptoSbor, NonFungibleData)]
 pub struct LiquidationTerm {
+    pub cdp_id: NonFungibleLocalId,
     pub payement_value: Decimal,
 }
 
@@ -110,7 +111,7 @@ pub fn create_liquidation_term_res_manager(
     owner_rule: AccessRule,
     component_rule: AccessRule,
 ) -> ResourceManager {
-    ResourceBuilder::new_ruid_non_fungible::<BatchFlashloanTerm>(OwnerRole::None)
+    ResourceBuilder::new_ruid_non_fungible::<LiquidationTerm>(OwnerRole::None)
         .metadata(metadata!(
             roles {
                 metadata_setter => owner_rule.clone();

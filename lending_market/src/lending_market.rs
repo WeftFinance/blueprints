@@ -968,7 +968,7 @@ mod lending_market {
             cdp_id: NonFungibleLocalId,
             requested_collaterals: Vec<(ResourceAddress, Option<Decimal>)>,
         ) -> (Vec<Bucket>, Bucket) {
-            let (mut cdp_data, delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
+            let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
 
             let mut cdp_health_checker = CDPHealthChecker::new(
                 &cdp_data,
@@ -999,14 +999,21 @@ mod lending_market {
                 payement_value += collateral_value
                     / (Decimal::ONE + pool_state.pool_config.liquidation_bonus_rate);
 
-                //
-
-                cdp_data
-                    .update_collateral(pool_res_address, -collateral_value)
-                    .expect("Error updating collateral for CDP");
+                // if the CDP is a delegatee CDP, collaterals are taken from the delegator CDP
+                if delegator_cdp_data.is_some() {
+                    delegator_cdp_data
+                        .as_mut()
+                        .unwrap()
+                        .update_collateral(pool_res_address, -collateral_units)
+                        .expect("Error updating delegatee collateral");
+                } else {
+                    cdp_data
+                        .update_collateral(pool_res_address, -collateral_value)
+                        .expect("Error updating collateral for CDP");
+                }
 
                 let pool_unit = pool_state
-                    .remove_pool_units_from_collateral(collateral_value)
+                    .remove_pool_units_from_collateral(collateral_units)
                     .expect("Error redeeming pool units from collateral");
 
                 assert!(
@@ -1017,26 +1024,29 @@ mod lending_market {
                 returned_collaterals.push(pool_state.pool.redeem(pool_unit));
             }
 
-            let liquidation_term = self
-                .batch_flashloan_term_res_manager
-                .mint_ruid_non_fungible(LiquidationTerm { payement_value });
+            let liquidation_term =
+                self.liquidation_term_res_manager
+                    .mint_ruid_non_fungible(LiquidationTerm {
+                        cdp_id,
+                        payement_value,
+                    });
 
             (returned_collaterals, liquidation_term)
         }
 
         pub fn end_liquidation(
             &mut self,
-            cdp_id: NonFungibleLocalId,
             payments: Vec<Bucket>,
             liquidation_term: Bucket,
         ) -> Vec<Bucket> {
-            let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
-
             let liquidation_term_data: LiquidationTerm =
                 liquidation_term.as_non_fungible().non_fungible().data();
 
+            let cdp_id = liquidation_term_data.cdp_id;
             let mut expected_payment_value = liquidation_term_data.payement_value;
             let mut remainers = Vec::new();
+
+            let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
 
             for mut payment in payments {
                 if expected_payment_value == dec!(0) {
