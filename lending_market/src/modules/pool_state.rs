@@ -191,7 +191,7 @@ impl LendingPoolState {
 
     /// Handle request to decrease borrowed amount.
     /// it add back liquidity and updated the pool loan state based on input interest startegy
-    pub fn deposit_from_repay(&mut self, payment: Bucket) -> Result<Decimal, String> {
+    pub fn deposit_for_repay(&mut self, payment: Bucket) -> Result<Decimal, String> {
         if payment.resource_address() != self.pool_res_address {
             return Err("Payment resource address missmatch".into());
         }
