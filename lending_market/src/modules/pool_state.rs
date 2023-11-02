@@ -222,7 +222,12 @@ impl LendingPoolState {
 
         // Debounce price update to configured period (in minutes)
         if period_in_minute >= self.pool_config.price_update_period {
-            self.price_updated_at = now;
+            // TODO: Handle XRD price update
+            // if self.pool_res_address == XRD {
+            //     self.last_price = dec!(1);
+            //     self.price_updated_at = now;
+            //     return Ok(());
+            // }
 
             let price_feed_result = self
                 .price_feed_comp
@@ -232,8 +237,15 @@ impl LendingPoolState {
                 return Err("Price feed returned None".to_string());
             }
 
+            let price_feed_result = price_feed_result.unwrap();
+
             // TODO: Handle price update too old
-            self.last_price = price_feed_result.unwrap().price;
+            // if (now - price_feed_result.timestamp) >= self.pool_config.price_update_period {
+            //     return Err("Price feed is too old".to_string());
+            // }
+
+            self.price_updated_at = now;
+            self.last_price = price_feed_result.price;
         }
 
         /* UPDATING INTEREST RATE */

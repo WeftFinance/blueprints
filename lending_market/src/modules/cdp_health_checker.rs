@@ -1,6 +1,18 @@
 use super::{cdp_data::*, liquidation_threshold::*, pool_state::*};
 use scrypto::prelude::*;
 
+pub enum LoadPositionType {
+    Collateral,
+    Loan,
+    DelegatorLoan,
+    DelegatorCollateral,
+}
+
+pub enum LoadDataType {
+    Own,
+    Delegator,
+}
+
 #[derive(ScryptoSbor, Debug, Clone)]
 pub struct PositionData {
     pub units: Decimal,
@@ -14,6 +26,24 @@ pub struct PositionData {
     pub unit_ratio: PreciseDecimal,
 }
 impl PositionData {
+    pub fn load_onledger_data(
+        &mut self,
+        units: Decimal,
+        load_type: LoadDataType,
+        pool_state: &mut KeyValueEntryRefMut<'_, LendingPoolState>,
+    ) -> Result<(), String> {
+        match load_type {
+            LoadDataType::Own => self.units += units,
+            LoadDataType::Delegator => self.delegator_units += units,
+        }
+
+        if self.unit_ratio == pdec!(0) {
+            self.unit_ratio = pool_state.get_loan_unit_ratio()?;
+        };
+
+        Ok(())
+    }
+
     pub fn update_data(&mut self, price: Decimal) -> Result<(), String> {
         self.amount = match (self.units / self.unit_ratio).checked_truncate(RoundingMode::ToZero) {
             Some(amount) => amount,
@@ -46,25 +76,6 @@ pub struct ExtendedCollateralPositionData {
     pub data: PositionData,
 }
 impl ExtendedCollateralPositionData {
-    /// Load  collateral position data from the onledger data.
-    /// If delegator collateral units are provided, we detuct the collateral units from the delegator collateral units
-    pub fn load_onledger_data(
-        &mut self,
-        collateral_units: Option<Decimal>,
-        delegator_collateral_units: Option<Decimal>,
-        pool_state: &mut KeyValueEntryRefMut<'_, LendingPoolState>,
-    ) {
-        if collateral_units.is_some() {
-            self.data.units = collateral_units.unwrap();
-            self.data.unit_ratio = pool_state.pool.get_pool_unit_ratio();
-        }
-
-        if delegator_collateral_units.is_some() {
-            self.data.delegator_units = delegator_collateral_units.unwrap() - self.data.units;
-            self.data.unit_ratio = pool_state.pool.get_pool_unit_ratio();
-        };
-    }
-
     pub fn update_data(&mut self) -> Result<(), String> {
         self.data.update_data(self.price)
     }
@@ -81,27 +92,6 @@ pub struct ExtendedLoanPositionData {
     pub discounted_collateral_value: Decimal,
 }
 impl ExtendedLoanPositionData {
-    /// Load the loan position data from the onledger data.
-    /// If delegator loan units are provided, we detuct the loan units from the delegator loan units
-    pub fn load_onledger_data(
-        &mut self,
-        loan_units: Option<Decimal>,
-        delegator_loan_units: Option<Decimal>,
-        pool_state: &mut KeyValueEntryRefMut<'_, LendingPoolState>,
-    ) -> Result<(), String> {
-        if loan_units.is_some() {
-            self.data.units = loan_units.unwrap();
-            self.data.unit_ratio = pool_state.get_loan_unit_ratio()?;
-        }
-
-        if delegator_loan_units.is_some() {
-            self.data.delegator_units = delegator_loan_units.unwrap() - self.data.units;
-            self.data.unit_ratio = pool_state.get_loan_unit_ratio()?;
-        };
-
-        Ok(())
-    }
-
     pub fn update_data(
         &mut self,
         collateral_positions: &IndexMap<ResourceAddress, ExtendedCollateralPositionData>,
@@ -197,9 +187,9 @@ impl CDPHealthChecker {
 
         // Function to load collateral or loan positions
         let mut load_data = |pool_res_address: &ResourceAddress,
-                             units: Option<Decimal>,
-                             delegator_units: Option<Decimal>,
-                             load_collateral: bool| {
+                             units: Decimal,
+
+                             load_collateral: LoadPositionType| {
             let wrapped_pool_state = pool_states.get_mut(&pool_res_address);
             if wrapped_pool_state.is_none() {
                 return Err("Pool state not found".to_string());
@@ -207,12 +197,41 @@ impl CDPHealthChecker {
 
             let mut pool_state = wrapped_pool_state.unwrap();
 
-            if load_collateral {
-                let collateral_position = extended_cdp.get_collateral_position(&mut pool_state)?;
-                collateral_position.load_onledger_data(units, delegator_units, &mut pool_state);
-            } else {
-                let loan_position = extended_cdp.get_loan_position(&mut pool_state)?;
-                loan_position.load_onledger_data(units, delegator_units, &mut pool_state)?;
+            match load_collateral {
+                LoadPositionType::Collateral => {
+                    let collateral_position =
+                        extended_cdp.get_collateral_position(&mut pool_state)?;
+                    collateral_position.data.load_onledger_data(
+                        units,
+                        LoadDataType::Own,
+                        &mut pool_state,
+                    )?
+                }
+                LoadPositionType::DelegatorCollateral => {
+                    let collateral_position =
+                        extended_cdp.get_collateral_position(&mut pool_state)?;
+                    collateral_position.data.load_onledger_data(
+                        units,
+                        LoadDataType::Delegator,
+                        &mut pool_state,
+                    )?
+                }
+                LoadPositionType::Loan => {
+                    let loan_position = extended_cdp.get_loan_position(&mut pool_state)?;
+                    loan_position.data.load_onledger_data(
+                        units,
+                        LoadDataType::Own,
+                        &mut pool_state,
+                    )?;
+                }
+                LoadPositionType::DelegatorLoan => {
+                    let loan_position = extended_cdp.get_loan_position(&mut pool_state)?;
+                    loan_position.data.load_onledger_data(
+                        units,
+                        LoadDataType::Delegator,
+                        &mut pool_state,
+                    )?;
+                }
             }
 
             Ok(())
@@ -223,7 +242,7 @@ impl CDPHealthChecker {
             .collaterals
             .iter()
             .try_for_each(|(pool_res_address, units)| {
-                load_data(pool_res_address, Some(*units), None, true)
+                load_data(pool_res_address, *units, LoadPositionType::Collateral)
             })?;
 
         // Load the loan positions
@@ -231,7 +250,7 @@ impl CDPHealthChecker {
             .loans
             .iter()
             .try_for_each(|(pool_res_address, units)| {
-                load_data(pool_res_address, Some(*units), None, false)
+                load_data(pool_res_address, *units, LoadPositionType::Loan)
             })?;
 
         // If the CDP is a delegator, also load his delegatee loans
@@ -241,7 +260,7 @@ impl CDPHealthChecker {
                 .delegatee_loans
                 .iter()
                 .try_for_each(|(pool_res_address, units)| {
-                    load_data(pool_res_address, None, Some(*units), false)
+                    load_data(pool_res_address, *units, LoadPositionType::DelegatorLoan)
                 })?;
         }
 
@@ -254,12 +273,29 @@ impl CDPHealthChecker {
                 .collaterals
                 .iter()
                 .try_for_each(|(pool_res_address, units)| {
-                    load_data(pool_res_address, None, Some(*units), true)
+                    load_data(
+                        pool_res_address,
+                        *units,
+                        LoadPositionType::DelegatorCollateral,
+                    )
+                })?;
+
+            delegator_cdp_data
+                .loans
+                .iter()
+                .try_for_each(|(pool_res_address, units)| {
+                    load_data(pool_res_address, *units, LoadPositionType::DelegatorLoan)
                 })?;
 
             delegator_cdp_data.delegatee_loans.iter().try_for_each(
-                |(pool_res_address, delegator_loan)| {
-                    load_data(pool_res_address, None, Some(*delegator_loan), false)
+                |(pool_res_address, delegatee_loan_units)| {
+                    let self_loan_unit = wrapped_cdp_data.get_loan_unit(*pool_res_address);
+
+                    load_data(
+                        pool_res_address,
+                        *delegatee_loan_units - self_loan_unit,
+                        LoadPositionType::DelegatorLoan,
+                    )
                 },
             )?;
         }
@@ -402,21 +438,6 @@ impl CDPHealthChecker {
 
     fn update_health_check_data(&mut self) -> Result<(), String> {
         // Update the collateral positions data and calculate the total solvency value
-        // let total_solvency_value = self.collateral_positions.iter_mut().fold(
-        //     Decimal::ZERO,
-        //     |mut total_solvency_value, (_, extended_collateral)| {
-        //         extended_collateral.update_data();
-
-        //         let position_collaral_value =
-        //             extended_collateral.data.value + extended_collateral.data.delegator_value;
-
-        //         total_solvency_value += position_collaral_value
-        //             / (Decimal::ONE + extended_collateral.liquidation_bonus_rate);
-
-        //         total_solvency_value
-        //     },
-        // );
-
         let total_solvency_value = self.collateral_positions.iter_mut().fold(
             Ok(Decimal::ZERO),
             |total_solvency_value: Result<Decimal, String>, (_, extended_collateral)| {
