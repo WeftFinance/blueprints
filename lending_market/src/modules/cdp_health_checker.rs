@@ -30,16 +30,11 @@ impl PositionData {
         &mut self,
         units: Decimal,
         load_type: LoadDataType,
-        pool_state: &mut KeyValueEntryRefMut<'_, LendingPoolState>,
     ) -> Result<(), String> {
         match load_type {
             LoadDataType::Own => self.units += units,
             LoadDataType::Delegator => self.delegator_units += units,
         }
-
-        if self.unit_ratio == pdec!(0) {
-            self.unit_ratio = pool_state.get_loan_unit_ratio()?;
-        };
 
         Ok(())
     }
@@ -76,6 +71,21 @@ pub struct ExtendedCollateralPositionData {
     pub data: PositionData,
 }
 impl ExtendedCollateralPositionData {
+    pub fn load_onledger_data(
+        &mut self,
+        units: Decimal,
+        load_type: LoadDataType,
+        pool_state: &mut KeyValueEntryRefMut<'_, LendingPoolState>,
+    ) -> Result<(), String> {
+        self.data.load_onledger_data(units, load_type)?;
+
+        if self.data.unit_ratio == pdec!(0) {
+            self.data.unit_ratio = pool_state.pool.get_pool_unit_ratio();
+        };
+
+        Ok(())
+    }
+
     pub fn update_data(&mut self) -> Result<(), String> {
         self.data.update_data(self.price)
     }
@@ -92,6 +102,21 @@ pub struct ExtendedLoanPositionData {
     pub discounted_collateral_value: Decimal,
 }
 impl ExtendedLoanPositionData {
+    pub fn load_onledger_data(
+        &mut self,
+        units: Decimal,
+        load_type: LoadDataType,
+        pool_state: &mut KeyValueEntryRefMut<'_, LendingPoolState>,
+    ) -> Result<(), String> {
+        self.data.load_onledger_data(units, load_type)?;
+
+        if self.data.unit_ratio == pdec!(0) {
+            self.data.unit_ratio = pool_state.get_loan_unit_ratio()?;
+        };
+
+        Ok(())
+    }
+
     pub fn update_data(
         &mut self,
         collateral_positions: &IndexMap<ResourceAddress, ExtendedCollateralPositionData>,
@@ -131,9 +156,6 @@ impl ExtendedLoanPositionData {
 pub struct CDPHealthChecker {
     /// The type of the CDP. Tree types are supported: Standard, Delegator and Delegatee
     cdp_type: CDPType,
-
-    /// The total value of the collateral in the CDP discounted by the liquidation bonus
-    // total_solvency_value: Decimal,
 
     /// The total value of the loan in the CDP including the delegator loan
     total_loan_value: Decimal,
@@ -181,7 +203,6 @@ impl CDPHealthChecker {
             cdp_type: cdp_data.cdp_type,
             collateral_positions: IndexMap::new(),
             loan_positions: IndexMap::new(),
-            // total_solvency_value: Decimal::ZERO,
             total_loan_value: Decimal::ZERO,
             total_loan_to_value_ratio: Decimal::ZERO,
             self_loan_value: Decimal::ZERO,
@@ -205,7 +226,7 @@ impl CDPHealthChecker {
                 LoadPositionType::Collateral => {
                     let collateral_position =
                         extended_cdp.get_collateral_position(&mut pool_state)?;
-                    collateral_position.data.load_onledger_data(
+                    collateral_position.load_onledger_data(
                         units,
                         LoadDataType::Own,
                         &mut pool_state,
@@ -214,7 +235,7 @@ impl CDPHealthChecker {
                 LoadPositionType::DelegatorCollateral => {
                     let collateral_position =
                         extended_cdp.get_collateral_position(&mut pool_state)?;
-                    collateral_position.data.load_onledger_data(
+                    collateral_position.load_onledger_data(
                         units,
                         LoadDataType::Delegator,
                         &mut pool_state,
@@ -222,15 +243,11 @@ impl CDPHealthChecker {
                 }
                 LoadPositionType::Loan => {
                     let loan_position = extended_cdp._get_loan_position(&mut pool_state)?;
-                    loan_position.data.load_onledger_data(
-                        units,
-                        LoadDataType::Own,
-                        &mut pool_state,
-                    )?;
+                    loan_position.load_onledger_data(units, LoadDataType::Own, &mut pool_state)?;
                 }
                 LoadPositionType::DelegatorLoan => {
                     let loan_position = extended_cdp._get_loan_position(&mut pool_state)?;
-                    loan_position.data.load_onledger_data(
+                    loan_position.load_onledger_data(
                         units,
                         LoadDataType::Delegator,
                         &mut pool_state,
