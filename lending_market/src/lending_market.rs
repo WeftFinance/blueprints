@@ -30,8 +30,8 @@ pub struct CollaterizedDebtPositionUpdatedEvent {
 mod lending_market {
 
     extern_blueprint!(
-        // "package_tdx_2_1p5tmhcj8j74ulggypapmy7qafq7378tl78ks58p498erm053l8jg6j",  // stokenet
-        "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
+        "package_tdx_2_1p5tmhcj8j74ulggypapmy7qafq7378tl78ks58p498erm053l8jg6j",  // stokenet
+        // "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
         // "package_sim1p40gjy9kwhn9fjwf9jur0axx72f7c36l6tx3z3vzefp0ytczcql99n", // testing
         SingleResourcePool {
             fn instantiate(
