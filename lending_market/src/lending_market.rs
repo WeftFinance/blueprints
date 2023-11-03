@@ -30,9 +30,9 @@ pub struct CollaterizedDebtPositionUpdatedEvent {
 mod lending_market {
 
     extern_blueprint!(
-        // "package_tdx_2_1p5jdfsp6yqpyp2eap9yxln36xuwsffy7ppl2xdu2nfagacl4hwhckz",  // stokenet
+        "package_tdx_2_1p5tmhcj8j74ulggypapmy7qafq7378tl78ks58p498erm053l8jg6j",  // stokenet
         // "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
-        "package_sim1p40gjy9kwhn9fjwf9jur0axx72f7c36l6tx3z3vzefp0ytczcql99n", // testing
+        // "package_sim1p40gjy9kwhn9fjwf9jur0axx72f7c36l6tx3z3vzefp0ytczcql99n", // testing
         SingleResourcePool {
             fn instantiate(
                 pool_res_address: ResourceAddress,
@@ -111,7 +111,8 @@ mod lending_market {
             // Liquidation methods
 
             refinance => PUBLIC;
-            liquidate => PUBLIC;
+            start_liquidation => PUBLIC;
+            end_liquidation => PUBLIC;
         }
 
     }
@@ -144,8 +145,11 @@ mod lending_market {
         ///
         pool_states: KeyValueStore<ResourceAddress, LendingPoolState>,
 
-        /// Flashloan term non fungible  resource manager
+        ///
         batch_flashloan_term_res_manager: ResourceManager,
+
+        ///
+        liquidation_term_res_manager: ResourceManager,
     }
 
     impl LendingMarket {
@@ -194,6 +198,10 @@ mod lending_market {
             let batch_flashloan_term_res_manager =
                 create_batch_flashloan_term_res_manager(admin_rule.clone(), component_rule.clone());
 
+            // * Create liquidation term resource manager * //
+            let liquidation_term_res_manager =
+                create_liquidation_term_res_manager(admin_rule.clone(), component_rule.clone());
+
             // *  Instantiate our component with the previously created resources and addresses * //
             Self {
                 market_component_address,
@@ -202,6 +210,7 @@ mod lending_market {
                 cdp_counter: 0,
                 fee_subsid_reserve: Vault::new(XRD),
                 batch_flashloan_term_res_manager,
+                liquidation_term_res_manager,
                 pool_unit_refs: IndexMap::new(),
                 revers_pool_unit_refs: IndexMap::new(),
                 pool_states: KeyValueStore::new(),
@@ -577,6 +586,7 @@ mod lending_market {
             delegator_cdp_data
                 .decrease_delegatee_count()
                 .expect("Error decreasing delegatee count");
+
             delegator_cdp_data
                 .save_cdp(&self.cdp_res_manager)
                 .expect("Error saving CDP");
@@ -710,13 +720,13 @@ mod lending_market {
         ) -> Vec<Bucket> {
             let mut remainers: Vec<Bucket> = Vec::new();
 
-            let batch_loan_term: BatchFlashloanTerm =
+            let batch_loan_term_data: BatchFlashloanTerm =
                 batch_loan_term.as_non_fungible().non_fungible().data();
 
             for mut payment in payments {
                 let pool_res_address = payment.resource_address();
 
-                let loan_term = batch_loan_term
+                let loan_term = batch_loan_term_data
                     .terms
                     .get(&pool_res_address)
                     .expect("flash loan term not found for provided resource");
@@ -742,6 +752,8 @@ mod lending_market {
 
                 remainers.push(payment);
             }
+
+            self.batch_flashloan_term_res_manager.burn(batch_loan_term);
 
             remainers
         }
@@ -774,47 +786,6 @@ mod lending_market {
             self._deposit_internal(cdp_id, deposits);
         }
 
-        fn _deposit_internal(&mut self, cdp_id: NonFungibleLocalId, deposits: Vec<Bucket>) {
-            let (mut cdp_data, _) = self._get_cdp_data(&cdp_id, false);
-
-            deposits.into_iter().fold((), |_, assets| {
-                let res_address = assets.resource_address();
-
-                let value = self.pool_unit_refs.get(&res_address);
-
-                let (pool_res_address, pool_unit_res_address) = if value.is_some() {
-                    (res_address, *value.unwrap())
-                } else {
-                    (
-                        *self.revers_pool_unit_refs.get(&res_address).unwrap(),
-                        res_address,
-                    )
-                };
-
-                let mut pool_state = self._get_pool_state(&pool_res_address);
-
-                let deposit_units = if res_address == pool_unit_res_address {
-                    assets
-                } else {
-                    pool_state.pool.contribute(assets)
-                };
-
-                cdp_data
-                    .update_collateral(pool_res_address, deposit_units.amount())
-                    .expect("Error updating collateral for CDP");
-
-                pool_state
-                    .add_pool_units_as_collateral(deposit_units)
-                    .expect("Error adding pool units as collateral");
-
-                ()
-            });
-
-            cdp_data
-                .save_cdp(&self.cdp_res_manager)
-                .expect("Error saving CDP");
-        }
-
         pub fn withdraw(
             &mut self,
             cdp_proof: Proof,
@@ -842,7 +813,7 @@ mod lending_market {
                         .expect("Error redeeming pool units from collateral");
 
                     let returned_assets = if !keep_deposit_unit {
-                        pool_state.pool.redeem(deposit_units)
+                        pool_state.redeem_proxy(deposit_units)
                     } else {
                         deposit_units
                     };
@@ -992,11 +963,11 @@ mod lending_market {
             remainers
         }
 
-        pub fn liquidate(
+        pub fn start_liquidation(
             &mut self,
             cdp_id: NonFungibleLocalId,
-            payments: Vec<Bucket>,
-        ) -> (Vec<Bucket>, Vec<Bucket>) {
+            requested_collaterals: Vec<(ResourceAddress, Option<Decimal>)>,
+        ) -> (Vec<Bucket>, Bucket) {
             let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
 
             let mut cdp_health_checker = CDPHealthChecker::new(
@@ -1009,49 +980,161 @@ mod lending_market {
                 .can_liquidate()
                 .expect("Error checking CDP");
 
-            let (remainers, total_payment_value) =
-                self._repay_internal(&mut cdp_data, &mut delegator_cdp_data, payments);
-
-            assert!(
-                total_payment_value <= cdp_health_checker.get_solvency_value(),
-                "Insufficien collateral to cover provided payments",
-            );
-
+            let mut payement_value = dec!(0);
             let mut returned_collaterals: Vec<Bucket> = Vec::new();
+
+            for (pool_res_address, collateral_units) in requested_collaterals {
+                let mut pool_state = self._get_pool_state(&pool_res_address);
+                let position_data = cdp_health_checker
+                    .collateral_positions
+                    .get(&pool_res_address)
+                    .unwrap();
+
+                let unit_ratio = position_data.data.unit_ratio;
+                let price = position_data.price;
+
+                let max_collaeral_units = if delegator_cdp_data.is_some() {
+                    delegator_cdp_data
+                        .as_mut()
+                        .unwrap()
+                        .get_collateral_units(pool_res_address)
+                } else {
+                    cdp_data.get_collateral_units(pool_res_address)
+                };
+
+                let collateral_units = match collateral_units {
+                    Some(collateral_units) => collateral_units.min(max_collaeral_units),
+                    None => max_collaeral_units,
+                };
+
+                let collateral_value = ((collateral_units / unit_ratio) * price)
+                    .checked_truncate(RoundingMode::ToZero)
+                    .unwrap();
+
+                payement_value +=
+                    collateral_value / (Decimal::ONE + position_data.liquidation_bonus_rate);
+
+                // if the CDP is a delegatee CDP, collaterals are taken from the delegator CDP
+                if delegator_cdp_data.is_some() {
+                    delegator_cdp_data
+                        .as_mut()
+                        .unwrap()
+                        .update_collateral(pool_res_address, -collateral_units)
+                        .expect("Error updating delegatee collateral");
+                } else {
+                    cdp_data
+                        .update_collateral(pool_res_address, -collateral_value)
+                        .expect("Error updating collateral for CDP");
+                }
+
+                let pool_unit = pool_state
+                    .remove_pool_units_from_collateral(collateral_units)
+                    .expect("Error redeeming pool units from collateral");
+
+                assert!(
+                    payement_value <= cdp_health_checker.self_closable_loan_value,
+                    "Requested collateral value is greater than the closable loan value"
+                );
+
+                returned_collaterals.push(pool_state.redeem_proxy(pool_unit));
+            }
+
+            let liquidation_term =
+                self.liquidation_term_res_manager
+                    .mint_ruid_non_fungible(LiquidationTerm {
+                        cdp_id,
+                        payement_value,
+                    });
+
+            (returned_collaterals, liquidation_term)
+        }
+
+        pub fn end_liquidation(
+            &mut self,
+            payments: Vec<Bucket>,
+            liquidation_term: Bucket,
+        ) -> Vec<Bucket> {
+            let liquidation_term_data: LiquidationTerm =
+                liquidation_term.as_non_fungible().non_fungible().data();
+
+            let cdp_id = liquidation_term_data.cdp_id;
+            let mut expected_payment_value = liquidation_term_data.payement_value;
+            let mut remainers = Vec::new();
 
             let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
 
-            // Liquidate the delegator collateral first if the CDP is a delegatee CDP
-            let remaining_payment_value = if cdp_data.is_delegatee() {
-                let (mut delegator_returned_collaterals, remaining_payment_value) = self
-                    ._liquidate_internal(
-                        &mut delegator_cdp_data.as_mut().unwrap(),
-                        total_payment_value,
-                    );
+            for mut payment in payments {
+                if expected_payment_value == dec!(0) {
+                    remainers.push(payment);
+                    continue;
+                }
 
-                returned_collaterals.append(&mut delegator_returned_collaterals);
+                let pool_res_address = payment.resource_address();
 
-                delegator_cdp_data
-                    .as_mut()
-                    .unwrap()
-                    .save_cdp(&self.cdp_res_manager)
-                    .expect("Error saving CDP");
+                let mut pool_state = self._get_pool_state(&pool_res_address);
 
-                remaining_payment_value
-            } else {
-                total_payment_value
-            };
+                let payment_amount = payment.amount();
 
-            let (mut self_returned_collaterals, _) =
-                self._liquidate_internal(&mut cdp_data, remaining_payment_value);
+                let loan_units = cdp_data.get_loan_unit(pool_res_address);
 
-            returned_collaterals.append(&mut self_returned_collaterals);
+                let unit_ratio = pool_state
+                    .get_loan_unit_ratio()
+                    .expect("Error getting loan unit ratio for provided resource");
+
+                let mut max_loan_amount = payment_amount.min(
+                    (loan_units / unit_ratio)
+                        .checked_truncate(RoundingMode::ToZero)
+                        .unwrap(),
+                );
+
+                max_loan_amount = max_loan_amount * pool_state.pool_config.loan_close_factor;
+
+                max_loan_amount = max_loan_amount.min(expected_payment_value);
+
+                expected_payment_value -= max_loan_amount * pool_state.last_price;
+
+                let delta_loan_unit: Decimal = pool_state
+                    .deposit_for_repay(payment.take_advanced(
+                        max_loan_amount,
+                        WithdrawStrategy::Rounded(RoundingMode::ToZero),
+                    ))
+                    .expect("Error in deposit_from_repay");
+
+                cdp_data
+                    .update_loan(pool_res_address, -delta_loan_unit)
+                    .expect("Error updating loan");
+
+                if cdp_data.is_delegatee() {
+                    delegator_cdp_data
+                        .as_mut()
+                        .unwrap()
+                        .update_delegatee_loan(pool_res_address, -delta_loan_unit)
+                        .expect("Error updating delegatee loan");
+                }
+
+                remainers.push(payment);
+            }
+
+            assert!(
+                expected_payment_value == dec!(0),
+                "Insufficient payment value"
+            );
 
             cdp_data
                 .save_cdp(&self.cdp_res_manager)
                 .expect("Error saving CDP");
 
-            (remainers, returned_collaterals)
+            if cdp_data.is_delegatee() {
+                delegator_cdp_data
+                    .as_mut()
+                    .unwrap()
+                    .save_cdp(&self.cdp_res_manager)
+                    .expect("Error saving CDP");
+            }
+
+            self.liquidation_term_res_manager.burn(liquidation_term);
+
+            remainers
         }
 
         //*  PRIVATE UTILITY METHODS   *//
@@ -1066,6 +1149,53 @@ mod lending_market {
                 .expect("Error updating pool state");
 
             pool_state
+        }
+
+        fn _deposit_internal(&mut self, cdp_id: NonFungibleLocalId, deposits: Vec<Bucket>) {
+            let (mut cdp_data, _) = self._get_cdp_data(&cdp_id, false);
+
+            // Deposit to delegatee CDP is not allowed for consistency reason.
+            // Delagator and delegatee CDPs should have consistent health status
+            assert!(!cdp_data.is_delegatee(), "Delegatee CDP can not deposit");
+
+            deposits.into_iter().fold((), |_, assets| {
+                let res_address = assets.resource_address();
+
+                let value = self.pool_unit_refs.get(&res_address);
+
+                let (pool_res_address, pool_unit_res_address) = if value.is_some() {
+                    (res_address, *value.unwrap())
+                } else {
+                    (
+                        *self.revers_pool_unit_refs.get(&res_address).unwrap(),
+                        res_address,
+                    )
+                };
+
+                let mut pool_state = self._get_pool_state(&pool_res_address);
+
+                let deposit_units = if res_address == pool_unit_res_address {
+                    assets
+                } else {
+                    pool_state
+                        .contribute_proxy(assets)
+                        .expect("Error contributing to pool")
+                };
+
+                cdp_data
+                    .update_collateral(pool_res_address, deposit_units.amount())
+                    .expect("Error updating collateral for CDP");
+
+                pool_state
+                    .add_pool_units_as_collateral(deposit_units)
+                    .expect("Error adding pool units as collateral");
+
+                ()
+            });
+
+            cdp_data
+                .save_cdp(&self.cdp_res_manager)
+                .expect("Error saving CDP");
         }
 
         fn _repay_internal(
@@ -1096,7 +1226,7 @@ mod lending_market {
                     );
 
                     let delta_loan_unit = pool_state
-                        .deposit_from_repay(payment.take_advanced(
+                        .deposit_for_repay(payment.take_advanced(
                             max_loan_amount,
                             WithdrawStrategy::Rounded(RoundingMode::ToZero),
                         ))
@@ -1135,55 +1265,6 @@ mod lending_market {
             }
 
             (remainers, total_payment_value)
-        }
-
-        fn _liquidate_internal(
-            &mut self,
-            cdp_data: &mut WrappedCDPData,
-            total_payment_value: Decimal,
-        ) -> (Vec<Bucket>, Decimal) {
-            let mut remaning_payment_value = total_payment_value;
-            let mut returned_collaterals: Vec<Bucket> = Vec::new();
-
-            for (pool_res_address, collateral_units) in cdp_data.get_data().collaterals.iter() {
-                let mut pool_state = self._get_pool_state(&pool_res_address);
-
-                let unit_ratio = pool_state.pool.get_pool_unit_ratio();
-                let price = pool_state.last_price;
-
-                let mut liquidated_collateral_units = (unit_ratio
-                    * (remaning_payment_value / price)
-                    * (Decimal::ONE + pool_state.pool_config.liquidation_bonus_rate))
-                    .checked_truncate(RoundingMode::ToZero)
-                    .unwrap();
-
-                liquidated_collateral_units = (*collateral_units).min(liquidated_collateral_units);
-
-                let liquidated_collateral_amount = (liquidated_collateral_units / unit_ratio)
-                    .checked_truncate(RoundingMode::ToZero)
-                    .unwrap();
-
-                let liquidated_collateral_value =
-                    liquidated_collateral_amount * pool_state.last_price;
-
-                cdp_data
-                    .update_collateral(*pool_res_address, -liquidated_collateral_units)
-                    .expect("Error updating collateral for CDP");
-
-                let pool_unit = pool_state
-                    .remove_pool_units_from_collateral(liquidated_collateral_amount)
-                    .expect("Error redeeming pool units from collateral");
-
-                returned_collaterals.push(pool_state.pool.redeem(pool_unit));
-
-                remaning_payment_value -= liquidated_collateral_value;
-
-                if remaning_payment_value == dec!(0) {
-                    break;
-                }
-            }
-
-            (returned_collaterals, remaning_payment_value)
         }
 
         fn _lock_fee(&mut self) {

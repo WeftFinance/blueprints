@@ -15,6 +15,12 @@ pub struct BatchFlashloanTerm {
     pub terms: IndexMap<ResourceAddress, BatchFlashloanItem>,
 }
 
+#[derive(ScryptoSbor, NonFungibleData)]
+pub struct LiquidationTerm {
+    pub cdp_id: NonFungibleLocalId,
+    pub payement_value: Decimal,
+}
+
 pub fn create_admin_badge(
     owner_rule: AccessRule,
     address_reservation: GlobalAddressReservation,
@@ -78,6 +84,34 @@ pub fn create_batch_flashloan_term_res_manager(
     component_rule: AccessRule,
 ) -> ResourceManager {
     ResourceBuilder::new_ruid_non_fungible::<BatchFlashloanTerm>(OwnerRole::None)
+        .metadata(metadata!(
+            roles {
+                metadata_setter => owner_rule.clone();
+                metadata_setter_updater => owner_rule.clone();
+                metadata_locker => owner_rule.clone();
+                metadata_locker_updater => owner_rule.clone();
+            }
+        ))
+        .mint_roles(mint_roles! {
+            minter => component_rule.clone();
+            minter_updater => rule!(deny_all);
+        })
+        .burn_roles(burn_roles! {
+            burner => component_rule.clone();
+            burner_updater => rule!(deny_all);
+        })
+        .deposit_roles(deposit_roles! {
+            depositor => rule!(deny_all);
+            depositor_updater => rule!(deny_all);
+        })
+        .create_with_no_initial_supply()
+}
+
+pub fn create_liquidation_term_res_manager(
+    owner_rule: AccessRule,
+    component_rule: AccessRule,
+) -> ResourceManager {
+    ResourceBuilder::new_ruid_non_fungible::<LiquidationTerm>(OwnerRole::None)
         .metadata(metadata!(
             roles {
                 metadata_setter => owner_rule.clone();

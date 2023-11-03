@@ -166,9 +166,11 @@ impl PoolConfig {
 
     pub fn check_limit(&self, input: CheckPoolConfigLimitInput) -> Result<(), String> {
         match input {
-            CheckPoolConfigLimitInput::DepositLimit(deposit_limit) => {
+            CheckPoolConfigLimitInput::DepositLimit(current_deposit) => {
                 if let Some(limit) = self.deposit_limit {
-                    if deposit_limit > limit {
+                    info!("current_deposit: {:?}, limit: {:?}", current_deposit, limit);
+
+                    if current_deposit > limit {
                         return Err(
                             "Deposit limit reached. Please try again with a smaller amount.".into(),
                         );
@@ -176,9 +178,9 @@ impl PoolConfig {
                 }
             }
 
-            CheckPoolConfigLimitInput::BorrowLimit(borrow_limit) => {
+            CheckPoolConfigLimitInput::BorrowLimit(current_borrow) => {
                 if let Some(limit) = self.borrow_limit {
-                    if borrow_limit > limit {
+                    if current_borrow > limit {
                         return Err(
                             "Borrow limit reached. Please try again with a smaller amount.".into(),
                         );
@@ -186,9 +188,9 @@ impl PoolConfig {
                 }
             }
 
-            CheckPoolConfigLimitInput::UtilizationLimit(utilization_limit) => {
+            CheckPoolConfigLimitInput::UtilizationLimit(current_utilization) => {
                 if let Some(limit) = self.utilization_limit {
-                    if utilization_limit > limit {
+                    if current_utilization > limit {
                         return Err(
                             "Utilization limit reached. Please try again with a smaller amount."
                                 .into(),
