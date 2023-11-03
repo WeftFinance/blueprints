@@ -813,7 +813,7 @@ mod lending_market {
                         .expect("Error redeeming pool units from collateral");
 
                     let returned_assets = if !keep_deposit_unit {
-                        pool_state.pool.redeem(deposit_units)
+                        pool_state.redeem_proxy(deposit_units)
                     } else {
                         deposit_units
                     };
@@ -985,19 +985,34 @@ mod lending_market {
 
             for (pool_res_address, collateral_units) in requested_collaterals {
                 let mut pool_state = self._get_pool_state(&pool_res_address);
+                let position_data = cdp_health_checker
+                    .collateral_positions
+                    .get(&pool_res_address)
+                    .unwrap();
 
-                let unit_ratio = pool_state.pool.get_pool_unit_ratio();
-                let price = pool_state.last_price;
+                let unit_ratio = position_data.data.unit_ratio;
+                let price = position_data.price;
 
-                let collateral_units =
-                    collateral_units.unwrap_or(cdp_data.get_collateral_units(pool_res_address));
+                let max_collaeral_units = if delegator_cdp_data.is_some() {
+                    delegator_cdp_data
+                        .as_mut()
+                        .unwrap()
+                        .get_collateral_units(pool_res_address)
+                } else {
+                    cdp_data.get_collateral_units(pool_res_address)
+                };
+
+                let collateral_units = match collateral_units {
+                    Some(collateral_units) => collateral_units.min(max_collaeral_units),
+                    None => max_collaeral_units,
+                };
 
                 let collateral_value = ((collateral_units / unit_ratio) * price)
                     .checked_truncate(RoundingMode::ToZero)
                     .unwrap();
 
-                payement_value += collateral_value
-                    / (Decimal::ONE + pool_state.pool_config.liquidation_bonus_rate);
+                payement_value +=
+                    collateral_value / (Decimal::ONE + position_data.liquidation_bonus_rate);
 
                 // if the CDP is a delegatee CDP, collaterals are taken from the delegator CDP
                 if delegator_cdp_data.is_some() {
@@ -1021,7 +1036,7 @@ mod lending_market {
                     "Requested collateral value is greater than the closable loan value"
                 );
 
-                returned_collaterals.push(pool_state.pool.redeem(pool_unit));
+                returned_collaterals.push(pool_state.redeem_proxy(pool_unit));
             }
 
             let liquidation_term =
@@ -1141,9 +1156,7 @@ mod lending_market {
 
             // Deposit to delegatee CDP is not allowed for consistency reason.
             // Delagator and delegatee CDPs should have consistent health status
-            if cdp_data.is_delegatee() {
-                panic!("Delegatee CDP can not deposit")
-            }
+            assert!(!cdp_data.is_delegatee(), "Delegatee CDP can not deposit");
 
             deposits.into_iter().fold((), |_, assets| {
                 let res_address = assets.resource_address();
@@ -1164,7 +1177,9 @@ mod lending_market {
                 let deposit_units = if res_address == pool_unit_res_address {
                     assets
                 } else {
-                    pool_state.pool.contribute(assets)
+                    pool_state
+                        .contribute_proxy(assets)
+                        .expect("Error contributing to pool")
                 };
 
                 cdp_data

@@ -151,10 +151,10 @@ pub struct CDPHealthChecker {
     self_loan_to_value_ratio: Decimal,
 
     /// IndexMap of all the collateral positions in the CDP. The key is the resource address of the asset used as collateral.
-    collateral_positions: IndexMap<ResourceAddress, ExtendedCollateralPositionData>,
+    pub collateral_positions: IndexMap<ResourceAddress, ExtendedCollateralPositionData>,
 
     /// IndexMap of all the loan positions in the CDP. the key is the resource address of borrowed the asset
-    loan_positions: IndexMap<ResourceAddress, ExtendedLoanPositionData>,
+    pub loan_positions: IndexMap<ResourceAddress, ExtendedLoanPositionData>,
 }
 impl CDPHealthChecker {
     // Created an extended CDP from a CDP NFT data
@@ -204,7 +204,7 @@ impl CDPHealthChecker {
             match load_collateral {
                 LoadPositionType::Collateral => {
                     let collateral_position =
-                        extended_cdp._get_collateral_position(&mut pool_state)?;
+                        extended_cdp.get_collateral_position(&mut pool_state)?;
                     collateral_position.data.load_onledger_data(
                         units,
                         LoadDataType::Own,
@@ -213,7 +213,7 @@ impl CDPHealthChecker {
                 }
                 LoadPositionType::DelegatorCollateral => {
                     let collateral_position =
-                        extended_cdp._get_collateral_position(&mut pool_state)?;
+                        extended_cdp.get_collateral_position(&mut pool_state)?;
                     collateral_position.data.load_onledger_data(
                         units,
                         LoadDataType::Delegator,
@@ -378,7 +378,7 @@ impl CDPHealthChecker {
             .collect()
     }
 
-    fn _get_collateral_position(
+    fn get_collateral_position(
         &mut self,
         pool_state: &mut KeyValueEntryRefMut<'_, LendingPoolState>,
     ) -> Result<&mut ExtendedCollateralPositionData, String> {
