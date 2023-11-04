@@ -30,8 +30,8 @@ pub struct CollaterizedDebtPositionUpdatedEvent {
 mod lending_market {
 
     extern_blueprint!(
-        "package_tdx_2_1p5tmhcj8j74ulggypapmy7qafq7378tl78ks58p498erm053l8jg6j",  // stokenet
-        // "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
+        // "package_tdx_2_1p5tmhcj8j74ulggypapmy7qafq7378tl78ks58p498erm053l8jg6j",  // stokenet
+        "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
         // "package_sim1p40gjy9kwhn9fjwf9jur0axx72f7c36l6tx3z3vzefp0ytczcql99n", // testing
         SingleResourcePool {
             fn instantiate(
@@ -698,7 +698,7 @@ mod lending_market {
 
                 let loan = pool_state.pool.protected_withdraw(
                     *amount,
-                    WithdrawType::TemporaryUse,
+                    WithdrawType::LiquidityWithdrawal,
                     WithdrawStrategy::Rounded(RoundingMode::ToZero),
                 );
 
@@ -747,7 +747,7 @@ mod lending_market {
                             due_amount,
                             WithdrawStrategy::Rounded(RoundingMode::ToZero),
                         ),
-                        DepositType::FromTemporaryUse,
+                        DepositType::LiquiditySupply,
                     );
 
                 remainers.push(payment);
@@ -1089,7 +1089,11 @@ mod lending_market {
 
                 max_loan_amount = max_loan_amount * pool_state.pool_config.loan_close_factor;
 
-                max_loan_amount = max_loan_amount.min(expected_payment_value);
+                let (_, pool_borrowed_amount) = pool_state.pool.get_pooled_amount();
+
+                max_loan_amount = max_loan_amount
+                    .min(expected_payment_value)
+                    .min(pool_borrowed_amount);
 
                 expected_payment_value -= max_loan_amount * pool_state.last_price;
 
@@ -1219,11 +1223,15 @@ mod lending_market {
                         .get_loan_unit_ratio()
                         .expect("Error getting loan unit ratio for provided resource");
 
-                    let max_loan_amount = payment_amount.min(
-                        (loan_units / unit_ratio)
-                            .checked_truncate(RoundingMode::ToZero)
-                            .unwrap(),
-                    );
+                    let (_, pool_borrowed_amount) = pool_state.pool.get_pooled_amount();
+
+                    let max_loan_amount = payment_amount
+                        .min(
+                            (loan_units / unit_ratio)
+                                .checked_truncate(RoundingMode::ToZero)
+                                .unwrap(),
+                        )
+                        .min(pool_borrowed_amount);
 
                     let delta_loan_unit = pool_state
                         .deposit_for_repay(payment.take_advanced(

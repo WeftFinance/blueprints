@@ -168,8 +168,6 @@ impl PoolConfig {
         match input {
             CheckPoolConfigLimitInput::DepositLimit(current_deposit) => {
                 if let Some(limit) = self.deposit_limit {
-                    info!("current_deposit: {:?}, limit: {:?}", current_deposit, limit);
-
                     if current_deposit > limit {
                         return Err(
                             "Deposit limit reached. Please try again with a smaller amount.".into(),

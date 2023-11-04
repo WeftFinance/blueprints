@@ -236,6 +236,10 @@ pub mod single_resource_pool {
             self.liquidity.put(assets);
 
             if deposit_type == DepositType::FromTemporaryUse {
+                assert!(
+                    amount <= self.external_liquidity_amount,
+                    "Provided amount is greater than the external liquidity amount!"
+                );
                 self.external_liquidity_amount -= amount;
             } else {
                 self.unit_to_asset_ratio = self._get_unit_to_asset_ratio();

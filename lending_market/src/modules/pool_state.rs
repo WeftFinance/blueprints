@@ -302,6 +302,21 @@ impl LendingPoolState {
 
         self.total_loan_unit += unit;
 
+        // TODO: Better rounding strategy
+        if amount <= 0.into() {
+            // Rounding error appears on repay
+            self.total_loan_unit = self
+                .total_loan_unit
+                .checked_round(17, RoundingMode::ToZero)
+                .unwrap();
+        }
+        // if self.total_loan == 0.into() {
+        //     self.total_loan_unit = 0.into();
+        // }
+        // if self.total_loan_unit == 0.into() {
+        //     self.total_loan = 0.into();
+        // }
+
         if self.total_loan_unit < 0.into() {
             return Err("Total loan unit cannot be negative".to_string());
         }
