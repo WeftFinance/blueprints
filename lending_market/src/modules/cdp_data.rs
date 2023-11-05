@@ -32,16 +32,28 @@ impl CDPType {
 pub struct CollaterizedDebtPositionData {
     #[mutable]
     pub key_image_url: String,
+
     #[mutable]
     pub name: String,
+
     #[mutable]
     pub description: String,
+
+    // immutable
+    pub minted_at: i64,
+
+    #[mutable]
+    pub updated_at: i64,
+
     #[mutable]
     pub cdp_type: CDPType,
+
     #[mutable]
     pub collaterals: IndexMap<ResourceAddress, Decimal>,
+
     #[mutable]
     pub loans: IndexMap<ResourceAddress, Decimal>,
+
     #[mutable]
     pub delegatee_loans: IndexMap<ResourceAddress, Decimal>,
 }
@@ -175,12 +187,15 @@ impl WrappedCDPData {
     }
 
     pub fn save_cdp(&self, res_manager: &ResourceManager) -> Result<(), String> {
+        let mut updated = false;
+
         if self.cdp_type_updated {
             res_manager.update_non_fungible_data(
                 &self.cdp_id,
                 "cdp_type",
                 self.cdp_data.cdp_type.clone(),
             );
+            updated = true;
         }
 
         if self.collateral_updated {
@@ -189,6 +204,7 @@ impl WrappedCDPData {
                 "collaterals",
                 self.cdp_data.collaterals.clone(),
             );
+            updated = true;
         }
 
         if self.loan_updated {
@@ -197,6 +213,7 @@ impl WrappedCDPData {
                 "loans",
                 self.cdp_data.loans.clone(),
             );
+            updated = true;
         }
 
         if self.delegatee_loan_updated {
@@ -204,6 +221,15 @@ impl WrappedCDPData {
                 &self.cdp_id,
                 "delegatee_loans",
                 self.cdp_data.delegatee_loans.clone(),
+            );
+            updated = true;
+        }
+
+        if updated {
+            res_manager.update_non_fungible_data(
+                &self.cdp_id,
+                "updated_at",
+                Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch,
             );
         }
 

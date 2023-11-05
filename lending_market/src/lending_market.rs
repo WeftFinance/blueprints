@@ -30,8 +30,8 @@ pub struct CollaterizedDebtPositionUpdatedEvent {
 mod lending_market {
 
     extern_blueprint!(
-        // "package_tdx_2_1p5tmhcj8j74ulggypapmy7qafq7378tl78ks58p498erm053l8jg6j",  // stokenet
-        "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
+        "package_tdx_2_1p4l8s3qymr20yr7hchwex582z3lmm37p8g56qzvtqerm3av8rtn0ue",  // stokenet
+        // "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
         // "package_sim1p40gjy9kwhn9fjwf9jur0axx72f7c36l6tx3z3vzefp0ytczcql99n", // testing
         SingleResourcePool {
             fn instantiate(
@@ -413,6 +413,8 @@ mod lending_market {
         ) -> Bucket {
             let cdp_id = NonFungibleLocalId::Integer(self._get_new_cdp_id().into());
 
+            let now = Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch;
+
             let data = CollaterizedDebtPositionData {
                 name: name.unwrap_or("".into()),
                 description: description.unwrap_or("".into()),
@@ -421,6 +423,8 @@ mod lending_market {
                 collaterals: IndexMap::new(),
                 loans: IndexMap::new(),
                 delegatee_loans: IndexMap::new(),
+                minted_at: now,
+                updated_at: now,
             };
 
             let cdp = self.cdp_res_manager.mint_non_fungible(&cdp_id, data);
@@ -474,6 +478,8 @@ mod lending_market {
                 .save_cdp(&self.cdp_res_manager)
                 .expect("Error saving CDP");
 
+            let now = Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch;
+
             let delegatee_cdp_data = CollaterizedDebtPositionData {
                 name: name.unwrap_or("".into()),
                 description: description.unwrap_or("".into()),
@@ -486,6 +492,8 @@ mod lending_market {
                 collaterals: IndexMap::new(),
                 loans: IndexMap::new(),
                 delegatee_loans: IndexMap::new(),
+                minted_at: now,
+                updated_at: now,
             };
 
             let delegatee_cdp_id = NonFungibleLocalId::Integer(self._get_new_cdp_id().into());
@@ -615,6 +623,12 @@ mod lending_market {
                     );
                 }
             }
+
+            self.cdp_res_manager.update_non_fungible_data(
+                &cdp_id,
+                "updated_at",
+                Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch,
+            );
         }
 
         pub fn update_delegatee_cdp(
@@ -654,16 +668,6 @@ mod lending_market {
                 max_loan_value_ratio,
             }));
 
-            let delegator_cdp_data = WrappedCDPData::new(&self.cdp_res_manager, &delegator_cdp_id);
-
-            CDPHealthChecker::new(
-                &delegatee_cdp_data,
-                Some(&delegator_cdp_data),
-                &mut self.pool_states,
-            )
-            .check_cdp()
-            .expect("Error checking CDP");
-
             delegatee_cdp_data
                 .save_cdp(&self.cdp_res_manager)
                 .expect("Error saving CDP");
@@ -698,7 +702,7 @@ mod lending_market {
 
                 let loan = pool_state.pool.protected_withdraw(
                     *amount,
-                    WithdrawType::LiquidityWithdrawal,
+                    WithdrawType::TemporaryUse,
                     WithdrawStrategy::Rounded(RoundingMode::ToZero),
                 );
 
@@ -738,17 +742,26 @@ mod lending_market {
                     "Insufficient repayment given for your loan!"
                 );
 
-                self.pool_states
+                let mut pool_state = self
+                    .pool_states
                     .get_mut(&pool_res_address)
-                    .expect("Pool state not found for provided resource")
-                    .pool
-                    .protected_deposit(
-                        payment.take_advanced(
-                            due_amount,
-                            WithdrawStrategy::Rounded(RoundingMode::ToZero),
-                        ),
-                        DepositType::LiquiditySupply,
-                    );
+                    .expect("Pool state not found for provided resource");
+
+                pool_state.pool.protected_deposit(
+                    payment.take_advanced(
+                        loan_term.loan_amount,
+                        WithdrawStrategy::Rounded(RoundingMode::ToZero),
+                    ),
+                    DepositType::FromTemporaryUse,
+                );
+
+                pool_state.pool.protected_deposit(
+                    payment.take_advanced(
+                        loan_term.fee_amount,
+                        WithdrawStrategy::Rounded(RoundingMode::ToZero),
+                    ),
+                    DepositType::LiquiditySupply,
+                );
 
                 remainers.push(payment);
             }
