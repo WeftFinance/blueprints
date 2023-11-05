@@ -67,7 +67,6 @@ pub struct ExtendedCollateralPositionData {
     pub asset_type: u8,
     pub liquidation_threshold: LiquidationThreshold,
     pub liquidation_bonus_rate: Decimal,
-    pub liquidation_bonus_fee_rate: Decimal,
     pub data: PositionData,
 }
 impl ExtendedCollateralPositionData {
@@ -411,7 +410,6 @@ impl CDPHealthChecker {
                     pool_res_address: pool_state.pool_res_address,
                     asset_type: pool_state.pool_config.asset_type,
                     liquidation_bonus_rate: pool_state.pool_config.liquidation_bonus_rate,
-                    liquidation_bonus_fee_rate: pool_state.pool_config.liquidation_bonus_fee_rate,
                     liquidation_threshold: pool_state.liquidation_threshold.clone(),
                     price: pool_state.last_price,
                     data: PositionData {

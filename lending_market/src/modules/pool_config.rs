@@ -12,7 +12,6 @@ pub enum UpdatePoolConfigInput {
 
     AssetType(u8),
     LiquidationBonusRate(Decimal),
-    LiquidationBonusFeeRate(Decimal),
     LoanCloseFactor(Decimal),
 
     PriceUpdatePeriod(i64),
@@ -32,7 +31,6 @@ pub struct PoolConfig {
     pub asset_type: u8,
 
     pub liquidation_bonus_rate: Decimal,
-    pub liquidation_bonus_fee_rate: Decimal,
     pub loan_close_factor: Decimal,
 
     pub deposit_limit: Option<Decimal>,
@@ -65,10 +63,6 @@ impl PoolConfig {
 
         if !is_valid_rate(self.liquidation_bonus_rate) {
             return Err("Liquidation bonus rate must be between 0 and 1".into());
-        }
-
-        if !is_valid_rate(self.liquidation_bonus_fee_rate) {
-            return Err("Liquidation bonus fee rate must be between 0 and 1".into());
         }
 
         if !is_valid_rate(self.loan_close_factor) {
@@ -130,14 +124,6 @@ impl PoolConfig {
                 }
 
                 self.liquidation_bonus_rate = liquidation_bonus_rate;
-            }
-
-            UpdatePoolConfigInput::LiquidationBonusFeeRate(liquidation_bonus_fee_rate) => {
-                if !is_valid_rate(liquidation_bonus_fee_rate) {
-                    return Err("Liquidation bonus fee rate must be between 0 and 1".into());
-                }
-
-                self.liquidation_bonus_fee_rate = liquidation_bonus_fee_rate;
             }
 
             UpdatePoolConfigInput::LoanCloseFactor(loan_close_factor) => {
