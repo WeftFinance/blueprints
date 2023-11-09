@@ -1,5 +1,5 @@
 [package]
-name = "basic_price_feed"
+name = "internal_price_feed"
 version = "0.1.0"
 edition = "2021"
 resolver = "2"

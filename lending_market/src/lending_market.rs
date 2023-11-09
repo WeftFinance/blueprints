@@ -30,8 +30,8 @@ pub struct CollaterizedDebtPositionUpdatedEvent {
 mod lending_market {
 
     extern_blueprint!(
-        "package_tdx_2_1p4l8s3qymr20yr7hchwex582z3lmm37p8g56qzvtqerm3av8rtn0ue",  // stokenet
-        // "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
+        // "package_tdx_2_1p4l8s3qymr20yr7hchwex582z3lmm37p8g56qzvtqerm3av8rtn0ue",  // stokenet
+        "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
         // "package_sim1p40gjy9kwhn9fjwf9jur0axx72f7c36l6tx3z3vzefp0ytczcql99n", // testing
         SingleResourcePool {
             fn instantiate(
@@ -75,6 +75,7 @@ mod lending_market {
             update_config => restrict_to: [admin];
             update_liquidation_threshold => restrict_to: [admin];
             set_interest_strategy => restrict_to: [admin];
+            update_pool_state => PUBLIC;
 
             /* Reserve Collector methods*/
 
@@ -338,10 +339,6 @@ mod lending_market {
                 .map(|pool_res_address| {
                     let mut pool_state = self._get_pool_state(&pool_res_address);
 
-                    pool_state
-                        .update_interest_and_price()
-                        .expect("Error updating pool state");
-
                     let price = pool_state.last_price;
 
                     let fee = pool_state.reserve.take_all();
@@ -400,6 +397,10 @@ mod lending_market {
             pool_state
                 .update_config(value)
                 .expect("Invalid pool config");
+        }
+
+        pub fn update_pool_state(&mut self, pool_res_address: ResourceAddress) {
+            self._get_pool_state(&pool_res_address);
         }
 
         ///*  CDP CREATION AND MANAGEMENT METHODS * ///
@@ -1059,6 +1060,18 @@ mod lending_market {
                         payement_value,
                     });
 
+            cdp_data
+                .save_cdp(&self.cdp_res_manager)
+                .expect("Error saving CDP");
+
+            if cdp_data.is_delegatee() {
+                delegator_cdp_data
+                    .as_mut()
+                    .unwrap()
+                    .save_cdp(&self.cdp_res_manager)
+                    .expect("Error saving CDP");
+            }
+
             (returned_collaterals, liquidation_term)
         }
 
@@ -1104,11 +1117,18 @@ mod lending_market {
 
                 let (_, pool_borrowed_amount) = pool_state.pool.get_pooled_amount();
 
-                max_loan_amount = max_loan_amount
+                let max_loan_value = (max_loan_amount * pool_state.last_price)
                     .min(expected_payment_value)
-                    .min(pool_borrowed_amount);
+                    .min(pool_borrowed_amount * pool_state.last_price);
 
-                expected_payment_value -= max_loan_amount * pool_state.last_price;
+                expected_payment_value -= max_loan_value;
+
+                max_loan_amount = max_loan_value / pool_state.last_price;
+
+                assert!(
+                    expected_payment_value >= dec!(0),
+                    "expected_payment_value should not be negative"
+                );
 
                 let delta_loan_unit: Decimal = pool_state
                     .deposit_for_repay(payment.take_advanced(
@@ -1134,7 +1154,8 @@ mod lending_market {
 
             assert!(
                 expected_payment_value == dec!(0),
-                "Insufficient payment value"
+                "Insufficient payment value, {} remaining",
+                expected_payment_value
             );
 
             cdp_data
@@ -1155,18 +1176,6 @@ mod lending_market {
         }
 
         //*  PRIVATE UTILITY METHODS   *//
-
-        fn _get_pool_state(
-            &mut self,
-            pool_res_address: &ResourceAddress,
-        ) -> KeyValueEntryRefMut<'_, LendingPoolState> {
-            let mut pool_state = self.pool_states.get_mut(&pool_res_address).unwrap();
-            pool_state
-                .update_interest_and_price()
-                .expect("Error updating pool state");
-
-            pool_state
-        }
 
         fn _deposit_internal(&mut self, cdp_id: NonFungibleLocalId, deposits: Vec<Bucket>) {
             let (mut cdp_data, _) = self._get_cdp_data(&cdp_id, false);
@@ -1288,22 +1297,17 @@ mod lending_market {
             (remainers, total_payment_value)
         }
 
-        fn _lock_fee(&mut self) {
-            if self.fee_subsid_reserve.amount() > 10.into() {
-                self.fee_subsid_reserve
-                    .as_fungible()
-                    .lock_contingent_fee(dec!(10));
-            }
-        }
+        fn _get_pool_state(
+            &mut self,
+            pool_res_address: &ResourceAddress,
+        ) -> KeyValueEntryRefMut<'_, LendingPoolState> {
+            let mut pool_state = self.pool_states.get_mut(&pool_res_address).unwrap();
 
-        fn _get_new_cdp_id(&mut self) -> u64 {
-            self.cdp_counter += 1;
-            self.cdp_counter
-        }
+            pool_state
+                .update_interest_and_price()
+                .expect("Error updating pool state");
 
-        fn _validate_cdp_proof(&self, cdp: Proof) -> NonFungibleLocalId {
-            let validated_cdp = cdp.check(self.cdp_res_manager.address());
-            validated_cdp.as_non_fungible().non_fungible_local_id()
+            pool_state
         }
 
         fn _get_cdp_data(
@@ -1325,6 +1329,16 @@ mod lending_market {
             };
 
             (cdp_data, delegator_cdp_data)
+        }
+
+        fn _get_new_cdp_id(&mut self) -> u64 {
+            self.cdp_counter += 1;
+            self.cdp_counter
+        }
+
+        fn _validate_cdp_proof(&self, cdp: Proof) -> NonFungibleLocalId {
+            let validated_cdp = cdp.check(self.cdp_res_manager.address());
+            validated_cdp.as_non_fungible().non_fungible_local_id()
         }
     }
 }
