@@ -294,28 +294,13 @@ impl LendingPoolState {
     fn _update_loan_unit(&mut self, amount: Decimal) -> Result<Decimal, String> {
         let unit_ratio = self.get_loan_unit_ratio()?;
 
-        let unit = (amount * unit_ratio) //
+        let units = (amount * unit_ratio) //
             .checked_truncate(RoundingMode::ToZero)
             .unwrap();
 
         self.total_loan += amount;
 
-        self.total_loan_unit += unit;
-
-        // TODO: Better rounding strategy
-        if amount <= 0.into() {
-            // Rounding error appears on repay
-            self.total_loan_unit = self
-                .total_loan_unit
-                .checked_round(17, RoundingMode::ToZero)
-                .unwrap();
-        }
-        // if self.total_loan == 0.into() {
-        //     self.total_loan_unit = 0.into();
-        // }
-        // if self.total_loan_unit == 0.into() {
-        //     self.total_loan = 0.into();
-        // }
+        self.total_loan_unit += units;
 
         if self.total_loan_unit < 0.into() {
             return Err("Total loan unit cannot be negative".to_string());
@@ -325,6 +310,6 @@ impl LendingPoolState {
             return Err("Total loan cannot be negative".to_string());
         }
 
-        Ok(unit)
+        Ok(units)
     }
 }

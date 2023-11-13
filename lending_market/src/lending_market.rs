@@ -34,6 +34,7 @@ mod lending_market {
         "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
         // "package_sim1p40gjy9kwhn9fjwf9jur0axx72f7c36l6tx3z3vzefp0ytczcql99n", // testing
         SingleResourcePool {
+
             fn instantiate(
                 pool_res_address: ResourceAddress,
                 owner_role: OwnerRole,
@@ -43,19 +44,24 @@ mod lending_market {
             ) -> (Global<SingleResourcePool>, ResourceAddress);
 
             fn contribute(&self, assets: Bucket) -> Bucket;
+
             fn redeem(&self, pool_units: Bucket) -> Bucket;
 
             fn protected_deposit(&mut self, assets: Bucket, deposit_type: DepositType);
+
             fn protected_withdraw(
                 &self,
                 amount: Decimal,
                 withdraw_type: WithdrawType,
                 withdraw_strategy: WithdrawStrategy
             ) -> Bucket;
+
             fn increase_external_liquidity(&mut self, amount: Decimal);
 
             fn get_pool_unit_ratio(&self) -> PreciseDecimal;
+
             fn get_pooled_amount(&self) -> (Decimal,Decimal);
+
         }
     );
 
@@ -925,7 +931,7 @@ mod lending_market {
             cdp_proof: Proof,
             delegatee_cdp_id: Option<NonFungibleLocalId>,
             payments: Vec<Bucket>,
-        ) -> Vec<Bucket> {
+        ) -> (Vec<Bucket>, Decimal) {
             // Loan of delegatee CDP can be directly repaid by the delegator CDP
             // If the delegatee CDP is provided, we check if the delegator CDP is linked to the delegatee CDP
             let cdp_id = if delegatee_cdp_id.is_some() {
@@ -950,17 +956,17 @@ mod lending_market {
 
             let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
 
-            let (remainers, _) =
+            let (remainers, payment_value) =
                 self._repay_internal(&mut cdp_data, &mut delegator_cdp_data, payments);
 
-            remainers
+            (remainers, payment_value)
         }
 
         pub fn refinance(
             &mut self,
             cdp_id: NonFungibleLocalId,
             payments: Vec<Bucket>,
-        ) -> Vec<Bucket> {
+        ) -> (Vec<Bucket>, Decimal) {
             let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
 
             CDPHealthChecker::new(
@@ -971,10 +977,10 @@ mod lending_market {
             .can_liquidate()
             .expect("Error checking CDP");
 
-            let (remainers, _) =
+            let (remainers, payment_value) =
                 self._repay_internal(&mut cdp_data, &mut delegator_cdp_data, payments);
 
-            remainers
+            (remainers, payment_value)
         }
 
         pub fn start_liquidation(
@@ -1037,7 +1043,7 @@ mod lending_market {
                         .expect("Error updating delegatee collateral");
                 } else {
                     cdp_data
-                        .update_collateral(pool_res_address, -collateral_value)
+                        .update_collateral(pool_res_address, -collateral_units)
                         .expect("Error updating collateral for CDP");
                 }
 
@@ -1277,6 +1283,13 @@ mod lending_market {
                     remainers.push(payment);
 
                     total_payment_value += max_loan_amount * pool_state.last_price;
+
+                    info!(
+                        "loan_unit: {},{},{}",
+                        unit_ratio,
+                        delta_loan_unit,
+                        cdp_data.get_loan_unit(pool_res_address)
+                    );
 
                     (remainers, total_payment_value)
                 },
