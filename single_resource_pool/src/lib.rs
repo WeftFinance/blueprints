@@ -170,9 +170,10 @@ pub mod single_resource_pool {
                 "Pool resource address mismatch"
             );
 
-            let unit_amount = (assets.amount() * self.unit_to_asset_ratio) //
-                .checked_truncate(RoundingMode::ToZero)
-                .expect("Error while calculating unit amount to mint");
+            let unit_amount =
+                (assets.amount() * self.unit_to_asset_ratio) //
+                    .checked_truncate(RoundingMode::ToNearestMidpointToEven)
+                    .expect("Error while calculating unit amount to mint");
 
             self.liquidity.put(assets);
 
@@ -191,7 +192,7 @@ pub mod single_resource_pool {
             );
 
             let amount = (pool_units.amount() / self.unit_to_asset_ratio) //
-                .checked_truncate(RoundingMode::ToZero)
+                .checked_truncate(RoundingMode::ToNearestMidpointToEven)
                 .expect("Error while calculating amount to withdraw");
 
             self.pool_unit_res_manager.burn(pool_units);
@@ -201,9 +202,10 @@ pub mod single_resource_pool {
                 "Not enough liquidity to withdraw this amount"
             );
 
-            let assets = self
-                .liquidity
-                .take_advanced(amount, WithdrawStrategy::Rounded(RoundingMode::ToZero));
+            let assets = self.liquidity.take_advanced(
+                amount,
+                WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
+            );
 
             assets
         }

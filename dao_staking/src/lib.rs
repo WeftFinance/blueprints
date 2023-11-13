@@ -273,7 +273,7 @@ pub mod staking_pool {
             self.asset_pool.protected_deposit(
                 assets.take_advanced(
                     asset_ammount,
-                    WithdrawStrategy::Rounded(RoundingMode::ToZero),
+                    WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
                 ),
                 DepositType::LiquidityAddition,
             );
@@ -323,7 +323,7 @@ pub mod staking_pool {
             self.asset_pool
                 .redeem(self.unstaking_pool_unit.take_advanced(
                     unstatking_receipt_data.pool_unit_amount,
-                    WithdrawStrategy::Rounded(RoundingMode::ToZero),
+                    WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
                 ))
         }
 
@@ -337,7 +337,7 @@ pub mod staking_pool {
             let stacked_resource = self.asset_pool.protected_withdraw(
                 amount,
                 WithdrawType::ForTemporaryUse,
-                WithdrawStrategy::Rounded(RoundingMode::ToZero),
+                WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
             );
 
             let staked_res_value =

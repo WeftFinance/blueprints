@@ -40,18 +40,21 @@ impl PositionData {
     }
 
     pub fn update_data(&mut self, price: Decimal) -> Result<(), String> {
-        self.amount = match (self.units / self.unit_ratio).checked_truncate(RoundingMode::ToZero) {
+        self.amount = match (self.units / self.unit_ratio)
+            .checked_truncate(RoundingMode::ToNearestMidpointToEven)
+        {
             Some(amount) => amount,
             None => return Err("Error calculating position amount".to_string()),
         };
 
         self.value = self.amount * price;
 
-        self.delegator_amount =
-            match (self.delegator_units / self.unit_ratio).checked_truncate(RoundingMode::ToZero) {
-                Some(amount) => amount,
-                None => return Err("Error calculating position delegator amount".to_string()),
-            };
+        self.delegator_amount = match (self.delegator_units / self.unit_ratio)
+            .checked_truncate(RoundingMode::ToNearestMidpointToEven)
+        {
+            Some(amount) => amount,
+            None => return Err("Error calculating position delegator amount".to_string()),
+        };
 
         self.delegator_value = self.delegator_amount * price;
 

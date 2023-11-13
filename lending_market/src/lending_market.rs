@@ -710,7 +710,7 @@ mod lending_market {
                 let loan = pool_state.pool.protected_withdraw(
                     *amount,
                     WithdrawType::TemporaryUse,
-                    WithdrawStrategy::Rounded(RoundingMode::ToZero),
+                    WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
                 );
 
                 loans.push(loan);
@@ -757,7 +757,7 @@ mod lending_market {
                 pool_state.pool.protected_deposit(
                     payment.take_advanced(
                         loan_term.loan_amount,
-                        WithdrawStrategy::Rounded(RoundingMode::ToZero),
+                        WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
                     ),
                     DepositType::FromTemporaryUse,
                 );
@@ -765,7 +765,7 @@ mod lending_market {
                 pool_state.pool.protected_deposit(
                     payment.take_advanced(
                         loan_term.fee_amount,
-                        WithdrawStrategy::Rounded(RoundingMode::ToZero),
+                        WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
                     ),
                     DepositType::LiquiditySupply,
                 );
@@ -1028,7 +1028,7 @@ mod lending_market {
                 };
 
                 let collateral_value = ((collateral_units / unit_ratio) * price)
-                    .checked_truncate(RoundingMode::ToZero)
+                    .checked_truncate(RoundingMode::ToNearestMidpointToEven)
                     .unwrap();
 
                 payement_value +=
@@ -1115,7 +1115,7 @@ mod lending_market {
 
                 let mut max_loan_amount = payment_amount.min(
                     (loan_units / unit_ratio)
-                        .checked_truncate(RoundingMode::ToZero)
+                        .checked_truncate(RoundingMode::ToNearestMidpointToEven)
                         .unwrap(),
                 );
 
@@ -1139,7 +1139,7 @@ mod lending_market {
                 let delta_loan_unit: Decimal = pool_state
                     .deposit_for_repay(payment.take_advanced(
                         max_loan_amount,
-                        WithdrawStrategy::Rounded(RoundingMode::ToZero),
+                        WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
                     ))
                     .expect("Error in deposit_from_repay");
 
@@ -1256,7 +1256,7 @@ mod lending_market {
                     let max_loan_amount = payment_amount
                         .min(
                             (loan_units / unit_ratio)
-                                .checked_truncate(RoundingMode::ToZero)
+                                .checked_truncate(RoundingMode::ToNearestMidpointToEven)
                                 .unwrap(),
                         )
                         .min(pool_borrowed_amount);
@@ -1264,7 +1264,7 @@ mod lending_market {
                     let delta_loan_unit = pool_state
                         .deposit_for_repay(payment.take_advanced(
                             max_loan_amount,
-                            WithdrawStrategy::Rounded(RoundingMode::ToZero),
+                            WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
                         ))
                         .expect("Error in deposit_from_repay");
 

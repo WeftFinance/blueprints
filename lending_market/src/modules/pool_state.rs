@@ -148,7 +148,7 @@ impl LendingPoolState {
 
         Ok(self.collaterals.take_advanced(
             pool_unit_amount,
-            WithdrawStrategy::Rounded(RoundingMode::ToZero),
+            WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
         ))
     }
 
@@ -181,7 +181,7 @@ impl LendingPoolState {
             self.pool.protected_withdraw(
                 amount,
                 WithdrawType::TemporaryUse,
-                WithdrawStrategy::Rounded(RoundingMode::ToZero),
+                WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
             ),
             loan_unit,
         );
@@ -283,7 +283,7 @@ impl LendingPoolState {
         self.reserve.put(self.pool.protected_withdraw(
             protocol_fees,
             WithdrawType::LiquidityWithdrawal,
-            WithdrawStrategy::Rounded(RoundingMode::ToZero),
+            WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
         ));
 
         Ok(())
@@ -295,7 +295,7 @@ impl LendingPoolState {
         let unit_ratio = self.get_loan_unit_ratio()?;
 
         let units = (amount * unit_ratio) //
-            .checked_truncate(RoundingMode::ToZero)
+            .checked_truncate(RoundingMode::ToNearestMidpointToEven)
             .unwrap();
 
         self.total_loan += amount;
