@@ -52,7 +52,7 @@ mod price_feed {
             let admin_rule = rule!(require(admin_badge_address));
 
             let admin_badge = ResourceBuilder::new_integer_non_fungible::<AuthBadgeData>(
-                OwnerRole::Fixed(admin_rule.clone()),
+                OwnerRole::Fixed(admin_rule),
             )
             .with_address(admin_badge_address_reservation)
             .mint_initial_supply([(IntegerNonFungibleLocalId::from(1), AuthBadgeData {})]);
@@ -68,7 +68,7 @@ mod price_feed {
                     minter_updater =>  rule!(deny_all);
                 })
                 .non_fungible_data_update_roles(non_fungible_data_update_roles! {
-                  non_fungible_data_updater => component_rule.clone();
+                  non_fungible_data_updater => component_rule;
                   non_fungible_data_updater_updater => rule!(deny_all);
                 })
                 .create_with_no_initial_supply();

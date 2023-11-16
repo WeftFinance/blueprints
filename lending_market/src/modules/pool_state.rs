@@ -264,27 +264,37 @@ impl LendingPoolState {
 
         self.interest_rate = self.interest_strategy.get_interest_rate(pool_utilization)?;
 
-        let minute_interest_rate = Decimal::ONE + (self.interest_rate / dec!(525600));
+        let minute_interest_rate = PreciseDecimal::ONE + (self.interest_rate / dec!(525600));
 
         let new_total_loan_amount =
             self.total_loan * minute_interest_rate.checked_powi(period_in_minute).unwrap();
 
         let accrued_interest = new_total_loan_amount - self.total_loan;
 
-        self.total_loan = new_total_loan_amount;
+        self.total_loan = new_total_loan_amount
+            .checked_truncate(RoundingMode::ToNearestMidpointToEven)
+            .unwrap();
 
         // Increase pool liquidity
 
-        self.pool.increase_external_liquidity(accrued_interest);
+        self.pool.increase_external_liquidity(
+            accrued_interest
+                .checked_truncate(RoundingMode::ToNearestMidpointToEven)
+                .unwrap(),
+        );
 
         // Collect protocol fees on accrued interest
         let protocol_fees = accrued_interest * self.pool_config.lending_fee_rate;
 
-        self.reserve.put(self.pool.protected_withdraw(
-            protocol_fees,
-            WithdrawType::LiquidityWithdrawal,
-            WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
-        ));
+        self.reserve.put(
+            self.pool.protected_withdraw(
+                protocol_fees
+                    .checked_truncate(RoundingMode::ToNearestMidpointToEven)
+                    .unwrap(),
+                WithdrawType::LiquidityWithdrawal,
+                WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
+            ),
+        );
 
         Ok(())
     }

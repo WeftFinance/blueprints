@@ -92,13 +92,13 @@ pub mod single_resource_pool {
             /* CHECK INPUTS */
             assert_fungible_res_address(pool_res_address, None);
 
-            let pool_unit_res_manager = ResourceBuilder::new_fungible(owner_role.clone())
+            let pool_unit_res_manager = ResourceBuilder::new_fungible(owner_role)
                 .mint_roles(mint_roles! {
                     minter => component_rule.clone();
                     minter_updater => rule!(deny_all);
                 })
                 .burn_roles(burn_roles! {
-                    burner => component_rule.clone();
+                    burner => component_rule;
                     burner_updater => rule!(deny_all);
                 })
                 .create_with_no_initial_supply();
@@ -149,7 +149,7 @@ pub mod single_resource_pool {
             (pool_component, pool_unit_res_manager)
         }
 
-        pub fn get_pool_unit_ratio(&mut self) -> PreciseDecimal {
+        pub fn get_pool_unit_ratio(&self) -> PreciseDecimal {
             self.unit_to_asset_ratio
         }
 
@@ -157,7 +157,7 @@ pub mod single_resource_pool {
             self.pool_unit_res_manager.total_supply().unwrap_or(dec!(0))
         }
 
-        pub fn get_pooled_amount(&mut self) -> (Decimal, Decimal) {
+        pub fn get_pooled_amount(&self) -> (Decimal, Decimal) {
             (self.liquidity.amount(), self.external_liquidity_amount)
         }
 
@@ -177,9 +177,7 @@ pub mod single_resource_pool {
 
             self.liquidity.put(assets);
 
-            let pool_units = self.pool_unit_res_manager.mint(unit_amount);
-
-            pool_units
+            self.pool_unit_res_manager.mint(unit_amount)
         }
 
         // Handle request to decrease liquidity.
@@ -202,12 +200,10 @@ pub mod single_resource_pool {
                 "Not enough liquidity to withdraw this amount"
             );
 
-            let assets = self.liquidity.take_advanced(
+            self.liquidity.take_advanced(
                 amount,
                 WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
-            );
-
-            assets
+            )
         }
 
         pub fn protected_withdraw(
@@ -282,13 +278,11 @@ pub mod single_resource_pool {
 
             let total_supply = self.pool_unit_res_manager.total_supply().unwrap_or(dec!(0));
 
-            let ratio = if total_liquidity_amount != 0.into() {
+            if total_liquidity_amount != 0.into() {
                 PreciseDecimal::from(total_supply) / PreciseDecimal::from(total_liquidity_amount)
             } else {
                 1.into()
-            };
-
-            ratio
+            }
         }
     }
 }

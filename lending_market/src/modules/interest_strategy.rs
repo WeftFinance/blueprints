@@ -7,14 +7,14 @@ pub struct ISInputBreakPoint {
     pub slop: Decimal,
 }
 
-#[derive(ScryptoSbor, Clone, Debug)]
+#[derive(ScryptoSbor, Default, Clone, Debug)]
 pub struct ISInternalBreakPoint {
     usage: Decimal,
     rate: Decimal,
     slop: Decimal,
 }
 
-#[derive(ScryptoSbor, Clone)]
+#[derive(ScryptoSbor, Default, Clone)]
 pub struct InterestStrategy {
     break_points: Vec<ISInternalBreakPoint>,
 }

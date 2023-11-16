@@ -63,10 +63,8 @@ impl LiquidationThreshold {
             }
         }
 
-        if self.identical_asset_type.is_some() {
-            if loan_asset_type == collateral_asset_type {
-                return self.identical_asset_type.unwrap();
-            }
+        if self.identical_asset_type.is_some() && loan_asset_type == collateral_asset_type {
+            return self.identical_asset_type.unwrap();
         }
 
         self.resource
@@ -128,16 +126,16 @@ impl LiquidationThreshold {
     }
 
     fn set_resource_entry(&mut self, resource: ResourceAddress, threshold: Option<Decimal>) {
-        if threshold.is_some() {
-            self.resource.insert(resource, threshold.unwrap());
+        if let Some(threshold) = threshold {
+            self.resource.insert(resource, threshold);
         } else {
             self.resource.remove(&resource);
         }
     }
 
     fn set_asset_type_entry(&mut self, asset_type: u8, threshold: Option<Decimal>) {
-        if threshold.is_some() {
-            self.asset_type.insert(asset_type, threshold.unwrap());
+        if let Some(threshold) = threshold {
+            self.asset_type.insert(asset_type, threshold);
         } else {
             self.asset_type.remove(&asset_type);
         }

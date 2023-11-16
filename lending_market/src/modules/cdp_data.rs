@@ -39,7 +39,7 @@ pub struct CollaterizedDebtPositionData {
     #[mutable]
     pub description: String,
 
-    // immutable
+    // #[immutable]
     pub minted_at: i64,
 
     #[mutable]

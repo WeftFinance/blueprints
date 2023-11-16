@@ -217,7 +217,7 @@ impl CDPHealthChecker {
                              units: Decimal,
 
                              load_collateral: LoadPositionType| {
-            let wrapped_pool_state = pool_states.get_mut(&pool_res_address);
+            let wrapped_pool_state = pool_states.get_mut(pool_res_address);
             if wrapped_pool_state.is_none() {
                 return Err("Pool state not found".to_string());
             };
@@ -330,35 +330,30 @@ impl CDPHealthChecker {
     pub fn check_cdp(&mut self) -> Result<(), String> {
         self._update_health_check_data()?;
 
-        if !(self.total_loan_to_value_ratio < Decimal::ONE) {
+        if self.total_loan_to_value_ratio >= Decimal::ONE {
             return Err("LTV need to be lower 1".to_string());
         }
 
         //
 
-        match &self.cdp_type {
-            CDPType::Delegatee(delagator_info) => {
-                let loan_value_check = match delagator_info.max_loan_value {
-                    Some(max_loan_value) => self.self_loan_value <= max_loan_value,
-                    _ => true,
-                };
+        if let CDPType::Delegatee(delagator_info) = &self.cdp_type {
+            let loan_value_check = match delagator_info.max_loan_value {
+                Some(max_loan_value) => self.self_loan_value <= max_loan_value,
+                _ => true,
+            };
 
-                if !loan_value_check {
-                    return Err("Loan value need to be lower than setted limit".into());
-                }
-
-                let loan_value_ratio_check = match delagator_info.max_loan_value_ratio {
-                    Some(max_loan_value_ratio) => {
-                        self.self_loan_to_value_ratio <= max_loan_value_ratio
-                    }
-                    _ => true,
-                };
-
-                if !loan_value_ratio_check {
-                    return Err("Loan value ratio need to be lower than setted limit".into());
-                }
+            if !loan_value_check {
+                return Err("Loan value need to be lower than setted limit".into());
             }
-            _ => (),
+
+            let loan_value_ratio_check = match delagator_info.max_loan_value_ratio {
+                Some(max_loan_value_ratio) => self.self_loan_to_value_ratio <= max_loan_value_ratio,
+                _ => true,
+            };
+
+            if !loan_value_ratio_check {
+                return Err("Loan value ratio need to be lower than setted limit".into());
+            }
         };
 
         Ok(())
@@ -480,7 +475,7 @@ impl CDPHealthChecker {
         let _total_solvency_value = self.collateral_positions.iter_mut().fold(
             Ok(Decimal::ZERO),
             |total_solvency_value: Result<Decimal, String>, (_, extended_collateral)| {
-                let updated_total = total_solvency_value.and_then(|current_total| {
+                total_solvency_value.and_then(|current_total| {
                     extended_collateral.update_data()?;
 
                     let position_collaral_value =
@@ -491,9 +486,7 @@ impl CDPHealthChecker {
                             / (Decimal::ONE + extended_collateral.liquidation_bonus_rate);
 
                     Ok(new_total)
-                });
-
-                updated_total
+                })
             },
         )?;
 
@@ -509,7 +502,7 @@ impl CDPHealthChecker {
         ) = self.loan_positions.iter_mut().fold(
             Ok((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO, Decimal::ZERO)),
             |result: Result<(Decimal, Decimal, Decimal, Decimal), String>, (_, extended_loan)| {
-                let new_result = result.and_then(
+                result.and_then(
                     |(
                         mut total_weighted_discounted_collateral_value,
                         mut total_loan_value,
@@ -544,9 +537,7 @@ impl CDPHealthChecker {
                             self_closable_loan_value,
                         ))
                     },
-                );
-
-                new_result
+                )
             },
         )?;
 
