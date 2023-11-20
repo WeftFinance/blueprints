@@ -13,7 +13,7 @@ pub struct MarketTestHelper {
     pub cdp_resource_address: ResourceAddress,
     pub market_admin_badge: ResourceAddress,
     pub market_reserve_collector_badge: ResourceAddress,
-
+    pub liquidation_term_resource_address : ResourceAddress,
     pub pools: IndexMap<ResourceAddress, (ComponentAddress, ResourceAddress)>,
 }
 
@@ -27,13 +27,14 @@ impl MarketTestHelper {
     ) -> MarketTestHelper {
         let _pool_package_address =
             test_runner.compile_and_publish(Path::new("../single_resource_pool"));
-
+        
+        // DONT REMOVE VERY IMPORTANT : ALLOW TO FIND THE PACKAGE ADDRESS OF single_resource_pool ON THE RTM file
         // let manifest = ManifestBuilder::new()
         //     .lock_fee_from_faucet()
         //     .call_function(
         //         _pool_package_address,
-        //         "PriceFeed",
-        //         "instantiate",
+        //         "SingleResourcePool",
+        //         "instantiate_locally",
         //         manifest_args!(),
         //     )
         //     .deposit_batch(owner_account_address);
@@ -49,15 +50,13 @@ impl MarketTestHelper {
 
         let market_package_address = test_runner.compile_and_publish(Path::new("."));
 
-        // Initialize lending market
-
         let manifest = ManifestBuilder::new()
             .lock_fee_from_faucet()
             .call_function(
                 market_package_address,
                 "LendingMarket",
                 "instantiate",
-                manifest_args!(None::<Decimal>, None::<Decimal>),
+                manifest_args!(None::<AccessRule>, None::<AccessRule>),
             )
             .deposit_batch(owner_account_address)
             .build();
@@ -78,12 +77,13 @@ impl MarketTestHelper {
         let market_reserve_collector_badge = resource_addresses_created[1];
         let cdp_resource_address = resource_addresses_created[2];
         let batch_flashloan_resource_address = resource_addresses_created[3];
+        let liquidation_term_resource_address = resource_addresses_created[4];
 
-        // Pools
+        // // Pools
 
-        let mut pools = IndexMap::new();
+             let mut pools = IndexMap::new();
 
-        // Initialize XRD lending pool
+        // // Initialize XRD lending pool
 
         let manifest2 = ManifestBuilder::new()
             .lock_fee_from_faucet()
@@ -102,7 +102,6 @@ impl MarketTestHelper {
                         dec!("0.005"),
                         0u8,
                         dec!("0.05"),
-                        dec!("0"),
                         dec!("1"),
                         None::<Decimal>,
                         None::<Decimal>,
@@ -159,7 +158,6 @@ impl MarketTestHelper {
                         dec!("0.005"),
                         1u8,
                         dec!("0.05"),
-                        dec!("0"),
                         dec!("1"),
                         None::<Decimal>,
                         None::<Decimal>,
@@ -203,6 +201,7 @@ impl MarketTestHelper {
             batch_flashloan_resource_address,
             cdp_resource_address,
             market_reserve_collector_badge,
+            liquidation_term_resource_address,
             pools,
         }
     }

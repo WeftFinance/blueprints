@@ -22,21 +22,17 @@ impl TestHelper {
         let (owner_public_key, owner_private_key, owner_account_address) =
             test_runner.new_allocated_account();
 
-        let _owner_badge_resource_address =
-            test_runner.create_non_fungible_resource(owner_account_address);
 
         let price_feed = PriceFeedTestHelper::new(
             &mut test_runner,
             owner_account_address,
-            owner_public_key,
-            // owner_badge_resource_address,
+            owner_public_key
         );
 
         let faucet = FaucetTestHelper::new(
             &mut test_runner,
             owner_account_address,
             owner_public_key,
-            // owner_badge_resource_address,
             &price_feed,
         );
 
@@ -44,7 +40,6 @@ impl TestHelper {
             &mut test_runner,
             owner_account_address,
             owner_public_key,
-            // owner_badge_resource_address,
             &price_feed,
             &faucet,
         );
