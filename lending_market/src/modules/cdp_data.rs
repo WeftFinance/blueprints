@@ -186,7 +186,11 @@ impl WrappedCDPData {
         result
     }
 
-    pub fn save_cdp(&self, res_manager: &ResourceManager) -> Result<(), String> {
+    pub fn save_cdp(
+        &self,
+        res_manager: &ResourceManager,
+        max_cdp_position: u8,
+    ) -> Result<(), String> {
         let mut updated = false;
 
         if self.cdp_type_updated {
@@ -226,6 +230,12 @@ impl WrappedCDPData {
         }
 
         if updated {
+            let position_count = self.cdp_data.collaterals.len()
+                + self.cdp_data.loans.len()
+                + self.cdp_data.delegatee_loans.len();
+
+            assert!(position_count as u8 <= max_cdp_position);
+
             res_manager.update_non_fungible_data(
                 &self.cdp_id,
                 "updated_at",

@@ -1,8 +1,9 @@
 use crate::lending_market::lending_market::*;
-use crate::modules::utils::*;
-use crate::modules::{interest_strategy::*, liquidation_threshold::*, pool_config::*};
+use crate::modules::{interest_strategy::*, liquidation_threshold::*, pool_config::*, utils::*};
 use scrypto::blueprints::consensus_manager::*;
 use scrypto::prelude::*;
+
+use super::operation_status::{OperatingStatus, OperatingStatusInput};
 
 #[derive(ScryptoSbor)]
 pub struct LendingPoolState {
@@ -53,6 +54,9 @@ pub struct LendingPoolState {
 
     ///
     pub pool_config: PoolConfig,
+
+    ///
+    pub operating_status: OperatingStatus,
 }
 
 impl LendingPoolState {
@@ -83,9 +87,19 @@ impl LendingPoolState {
             .update_liquidation_threshold(value)
     }
 
+    ///* OPERATING STATUS METHODS *///
+
+    pub fn check_operating_status(&self, value: OperatingStatusInput) -> Result<(), String> {
+        if !self.operating_status.check(value.clone()) {
+            return Err("Operation not allowed".to_string());
+        }
+
+        Ok(())
+    }
+
     /// Get the current loan unit ratio ///
 
-    pub fn get_loan_unit_ratio(&mut self) -> Result<PreciseDecimal, String> {
+    pub fn get_loan_unit_ratio(&self) -> Result<PreciseDecimal, String> {
         // convert total_loan_unit and total_loan to PreciseDecimal to improve precision and reduce rounding errors
         let ratio = if self.total_loan != 0.into() {
             PreciseDecimal::from(self.total_loan_unit) / PreciseDecimal::from(self.total_loan)

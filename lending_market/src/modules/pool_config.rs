@@ -187,3 +187,8 @@ impl PoolConfig {
         Ok(())
     }
 }
+
+#[derive(ScryptoSbor, Clone)]
+pub struct MarketConfig {
+    pub max_cdp_position: u8,
+}

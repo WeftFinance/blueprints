@@ -1,7 +1,7 @@
 use crate::modules::utils::*;
 use crate::modules::{
     cdp_data::*, cdp_health_checker::*, interest_strategy::*, liquidation_threshold::*,
-    pool_config::*, pool_state::*,
+    operation_status::*, pool_config::*, pool_state::*,
 };
 use crate::resources::*;
 use scrypto::prelude::*;
@@ -81,6 +81,9 @@ mod lending_market {
             update_config => restrict_to: [admin];
             update_liquidation_threshold => restrict_to: [admin];
             set_interest_strategy => restrict_to: [admin];
+
+            update_operating_status => restrict_to: [admin];
+
             update_pool_state => PUBLIC;
 
             /* Reserve Collector methods*/
@@ -158,6 +161,12 @@ mod lending_market {
 
         ///
         liquidation_term_res_manager: ResourceManager,
+
+        ///
+        operating_status: OperatingStatus,
+
+        ///
+        market_config: MarketConfig,
     }
 
     impl LendingMarket {
@@ -223,6 +232,10 @@ mod lending_market {
                 revers_pool_unit_refs: IndexMap::new(),
                 pool_states: KeyValueStore::new(),
                 listed_assets: IndexSet::new(),
+                operating_status: OperatingStatus::default(),
+                market_config: MarketConfig {
+                    max_cdp_position: 18,
+                },
             }
             .instantiate()
             .prepare_to_globalize(OwnerRole::None)
@@ -261,6 +274,22 @@ mod lending_market {
                 "The lending pool is already registered"
             );
 
+            let res_manager: ResourceManager = pool_res_address.into();
+
+            let recaller_role = res_manager
+                .get_role("recaller")
+                .expect("Error getting recaller role");
+
+            let recaller_updater_role = res_manager
+                .get_role("recaller_updater")
+                .expect("Error getting recaller_updater role");
+
+            assert!(
+                recaller_role == AccessRule::DenyAll
+                    && recaller_updater_role == AccessRule::DenyAll,
+                "Recallable assets are not supported"
+            );
+
             liquidation_threshold
                 .check()
                 .expect("Invalid liquidation threshold");
@@ -271,7 +300,7 @@ mod lending_market {
 
             let (pool, pool_unit_res_address) = Blueprint::<SingleResourcePool>::instantiate(
                 pool_res_address,
-                OwnerRole::Fixed(self.admin_rule.clone()),
+                OwnerRole::None,
                 component_rule.clone(),
                 component_rule.clone(),
                 component_rule,
@@ -312,6 +341,7 @@ mod lending_market {
                 interest_strategy,
                 liquidation_threshold,
                 pool_config,
+                operating_status: OperatingStatus::default(),
             };
 
             //
@@ -337,6 +367,8 @@ mod lending_market {
             self.fee_subsid_reserve.put(fee_subsid);
         }
 
+        //
+
         // Collect reserve retention from all pools
         pub fn collect_reserve(&mut self) -> Vec<(Decimal, Bucket)> {
             let listed_assets = self.listed_assets.clone();
@@ -344,7 +376,7 @@ mod lending_market {
             listed_assets
                 .iter()
                 .map(|pool_res_address| {
-                    let mut pool_state = self._get_pool_state(pool_res_address);
+                    let mut pool_state = self._get_pool_state(pool_res_address, None);
 
                     let price = pool_state.last_price;
 
@@ -360,7 +392,7 @@ mod lending_market {
             pool_res_address: ResourceAddress,
             price_feed: Global<AnyComponent>,
         ) {
-            let mut pool_state = self._get_pool_state(&pool_res_address);
+            let mut pool_state = self._get_pool_state(&pool_res_address, None);
 
             price_feed
                 .call_raw::<Option<PriceInfo>>("get_price", scrypto_args!(pool_res_address))
@@ -374,7 +406,7 @@ mod lending_market {
             pool_res_address: ResourceAddress,
             value: UpdateLiquidationThresholdInput,
         ) {
-            let mut pool_state = self._get_pool_state(&pool_res_address);
+            let mut pool_state = self._get_pool_state(&pool_res_address, None);
 
             pool_state
                 .update_liquidation_threshold(value)
@@ -387,7 +419,7 @@ mod lending_market {
             initial_rate: Decimal,
             interest_options_break_points: Vec<ISInputBreakPoint>,
         ) {
-            let mut pool_state = self._get_pool_state(&pool_res_address);
+            let mut pool_state = self._get_pool_state(&pool_res_address, None);
 
             pool_state
                 .set_interest_strategy(initial_rate, interest_options_break_points)
@@ -399,7 +431,7 @@ mod lending_market {
             pool_res_address: ResourceAddress,
             value: UpdatePoolConfigInput,
         ) {
-            let mut pool_state = self._get_pool_state(&pool_res_address);
+            let mut pool_state = self._get_pool_state(&pool_res_address, None);
 
             pool_state
                 .update_config(value)
@@ -407,7 +439,25 @@ mod lending_market {
         }
 
         pub fn update_pool_state(&mut self, pool_res_address: ResourceAddress) {
-            self._get_pool_state(&pool_res_address);
+            self._get_pool_state(&pool_res_address, None);
+        }
+
+        ///
+        pub fn update_operating_status(
+            &mut self,
+            value: OperatingStatusInput,
+            pool_res_address: Option<ResourceAddress>,
+        ) {
+            match pool_res_address {
+                Some(pool_res_address) => {
+                    let mut pool_state = self._get_pool_state(&pool_res_address, None);
+
+                    pool_state.operating_status.update(value)
+                }
+                None => {
+                    self.operating_status.update(value);
+                }
+            }
         }
 
         ///*  CDP CREATION AND MANAGEMENT METHODS * ///
@@ -483,7 +533,7 @@ mod lending_market {
                 .increase_delegatee_count()
                 .expect("Error increasing delegatee count");
             delegator_cdp_data
-                .save_cdp(&self.cdp_res_manager)
+                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                 .expect("Error saving CDP");
 
             let now = Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch;
@@ -568,10 +618,10 @@ mod lending_market {
             .expect("Error checking CDP");
 
             delegator_cdp_data
-                .save_cdp(&self.cdp_res_manager)
+                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                 .expect("Error saving CDP");
             delegatee_cdp_data
-                .save_cdp(&self.cdp_res_manager)
+                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                 .expect("Error saving CDP");
         }
 
@@ -603,7 +653,7 @@ mod lending_market {
                 .expect("Error checking CDP");
 
             delegatee_cdp_data
-                .save_cdp(&self.cdp_res_manager)
+                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                 .expect("Error saving CDP");
 
             delegator_cdp_data
@@ -611,7 +661,7 @@ mod lending_market {
                 .expect("Error decreasing delegatee count");
 
             delegator_cdp_data
-                .save_cdp(&self.cdp_res_manager)
+                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                 .expect("Error saving CDP");
         }
 
@@ -684,7 +734,7 @@ mod lending_market {
             }));
 
             delegatee_cdp_data
-                .save_cdp(&self.cdp_res_manager)
+                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                 .expect("Error saving CDP");
         }
 
@@ -694,6 +744,8 @@ mod lending_market {
             &mut self,
             loan_amounts: IndexMap<ResourceAddress, Decimal>,
         ) -> (Vec<Bucket>, Bucket) {
+            self.check_operating_status(OperatingStatusInput::Flashloan(true));
+
             let mut loans: Vec<Bucket> = Vec::new();
             let mut terms: IndexMap<ResourceAddress, BatchFlashloanItem> = IndexMap::new();
 
@@ -707,6 +759,10 @@ mod lending_market {
                     .pool_states
                     .get_mut(pool_res_address)
                     .expect("Pool state not found for provided resource");
+
+                pool_state
+                    .check_operating_status(OperatingStatusInput::Flashloan(true))
+                    .expect("Flashloan is not enabled for the pool");
 
                 let fee_amount = (*amount) * pool_state.pool_config.flashloan_fee_rate;
 
@@ -789,7 +845,12 @@ mod lending_market {
         //* Lending and Borrowing methods * //
 
         pub fn contribute(&mut self, assets: Bucket) -> Bucket {
-            let pool_state = self._get_pool_state(&assets.resource_address());
+            self.check_operating_status(OperatingStatusInput::Contribute(true));
+
+            let pool_state = self._get_pool_state(
+                &assets.resource_address(),
+                Some(OperatingStatusInput::Contribute(true)),
+            );
 
             pool_state
                 .contribute_proxy(assets)
@@ -797,12 +858,14 @@ mod lending_market {
         }
 
         pub fn redeem(&mut self, pool_units: Bucket) -> Bucket {
+            self.check_operating_status(OperatingStatusInput::Redeem(true));
+
             let pool_res_address = *self
                 .revers_pool_unit_refs
                 .get(&pool_units.resource_address())
                 .expect("Pool unit not found");
 
-            self._get_pool_state(&pool_res_address)
+            self._get_pool_state(&pool_res_address, Some(OperatingStatusInput::Redeem(true)))
                 .redeem_proxy(pool_units)
         }
 
@@ -817,6 +880,8 @@ mod lending_market {
             cdp_proof: Proof,
             withdraw_details: Vec<(ResourceAddress, Decimal, bool)>,
         ) -> Vec<Bucket> {
+            self.check_operating_status(OperatingStatusInput::Withdraw(true));
+
             let cdp_id = self._validate_cdp_proof(cdp_proof);
 
             let (mut cdp_data, _) = self._get_cdp_data(&cdp_id, false);
@@ -824,7 +889,10 @@ mod lending_market {
             let withdrawals = withdraw_details.into_iter().fold(
                 Vec::new(),
                 |mut withdrawals, (pool_res_address, unit_amount, keep_deposit_unit)| {
-                    let mut pool_state = self._get_pool_state(&pool_res_address);
+                    let mut pool_state = self._get_pool_state(
+                        &pool_res_address,
+                        Some(OperatingStatusInput::Withdraw(true)),
+                    );
 
                     let current_deposit_units = cdp_data.get_collateral_units(pool_res_address);
 
@@ -867,7 +935,7 @@ mod lending_market {
             .expect("Error checking CDP");
 
             cdp_data
-                .save_cdp(&self.cdp_res_manager)
+                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                 .expect("Error saving CDP");
 
             withdrawals
@@ -878,6 +946,8 @@ mod lending_market {
             cdp_proof: Proof,
             borrows: Vec<(ResourceAddress, Decimal)>,
         ) -> Vec<Bucket> {
+            self.check_operating_status(OperatingStatusInput::Borrow(true));
+
             let cdp_id = self._validate_cdp_proof(cdp_proof);
 
             let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
@@ -886,7 +956,10 @@ mod lending_market {
                 borrows
                     .into_iter()
                     .fold(Vec::new(), |mut loans, (pool_res_address, amount)| {
-                        let mut pool_state = self._get_pool_state(&pool_res_address);
+                        let mut pool_state = self._get_pool_state(
+                            &pool_res_address,
+                            Some(OperatingStatusInput::Borrow(true)),
+                        );
 
                         let (borrowed_assets, delta_loan_units) = pool_state
                             .withdraw_for_borrow(amount)
@@ -918,14 +991,14 @@ mod lending_market {
             .expect("Error checking CDP");
 
             cdp_data
-                .save_cdp(&self.cdp_res_manager)
+                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                 .expect("Error saving CDP");
 
             if delegator_cdp_data.is_some() {
                 delegator_cdp_data
                     .as_mut()
                     .unwrap()
-                    .save_cdp(&self.cdp_res_manager)
+                    .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                     .expect("Error saving CDP");
             }
 
@@ -938,6 +1011,8 @@ mod lending_market {
             delegatee_cdp_id: Option<NonFungibleLocalId>,
             payments: Vec<Bucket>,
         ) -> (Vec<Bucket>, Decimal) {
+            self.check_operating_status(OperatingStatusInput::Repay(true));
+
             // Loan of delegatee CDP can be directly repaid by the delegator CDP
             // If the delegatee CDP is provided, we check if the delegator CDP is linked to the delegatee CDP
             let cdp_id = if let Some(delegatee_cdp_id) = delegatee_cdp_id {
@@ -1005,6 +1080,15 @@ mod lending_market {
             requested_collaterals: Vec<ResourceAddress>,
             total_payment_value: Option<Decimal>,
         ) -> (Vec<Bucket>, Bucket) {
+            self.check_operating_status(OperatingStatusInput::Liquidation(true));
+
+            if let Some(total_payment_value) = total_payment_value {
+                assert!(
+                    total_payment_value >= 0.into(),
+                    "INVALID_INPUT: Total payment value must be non-negative"
+                );
+            }
+
             let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
 
             let mut cdp_health_checker = CDPHealthChecker::new(
@@ -1025,6 +1109,7 @@ mod lending_market {
                 delegator_cdp_data.as_mut().unwrap_or(&mut cdp_data),
                 requested_collaterals,
                 temp_total_payment_value,
+                false,
             );
 
             let liquidation_term =
@@ -1068,6 +1153,8 @@ mod lending_market {
             payments: Vec<Bucket>,
             requested_collaterals: Vec<ResourceAddress>,
         ) -> (Vec<Bucket>, Decimal) {
+            self.check_operating_status(OperatingStatusInput::Liquidation(true));
+
             let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
 
             CDPHealthChecker::new(
@@ -1085,6 +1172,7 @@ mod lending_market {
                 delegator_cdp_data.as_mut().unwrap_or(&mut cdp_data),
                 requested_collaterals,
                 total_payment_value,
+                true,
             );
 
             (remainers, total_payment_value)
@@ -1093,6 +1181,8 @@ mod lending_market {
         //*  PRIVATE UTILITY METHODS   *//
 
         fn _deposit_internal(&mut self, cdp_id: NonFungibleLocalId, deposits: Vec<Bucket>) {
+            self.check_operating_status(OperatingStatusInput::Deposit(true));
+
             let (mut cdp_data, _) = self._get_cdp_data(&cdp_id, false);
 
             // Deposit to delegatee CDP is not allowed for consistency reason.
@@ -1113,7 +1203,8 @@ mod lending_market {
                     )
                 };
 
-                let mut pool_state = self._get_pool_state(&pool_res_address);
+                let mut pool_state = self
+                    ._get_pool_state(&pool_res_address, Some(OperatingStatusInput::Deposit(true)));
 
                 let deposit_units = if res_address == pool_unit_res_address {
                     assets
@@ -1133,7 +1224,7 @@ mod lending_market {
             });
 
             cdp_data
-                .save_cdp(&self.cdp_res_manager)
+                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                 .expect("Error saving CDP");
         }
 
@@ -1141,7 +1232,8 @@ mod lending_market {
             &mut self,
             cdp_data: &mut WrappedCDPData,
             requested_collaterals: Vec<ResourceAddress>,
-            requested_collaterals_value: Decimal, // If Some then withdraw is for liquidation
+            requested_collaterals_value: Decimal,
+            check_requested_collaterals: bool,
         ) -> (Vec<Bucket>, Decimal) {
             let mut returned_collaterals: Vec<Bucket> = Vec::new();
             let mut returned_collaterals_value = dec!(0);
@@ -1155,7 +1247,10 @@ mod lending_market {
                     break;
                 }
 
-                let mut pool_state = self._get_pool_state(&pool_res_address);
+                let mut pool_state = self._get_pool_state(
+                    &pool_res_address,
+                    Some(OperatingStatusInput::Liquidation(true)),
+                );
 
                 let bonus_rate = dec!(1) + pool_state.pool_config.liquidation_bonus_rate;
 
@@ -1193,8 +1288,16 @@ mod lending_market {
                 returned_collaterals.push(pool_state.redeem_proxy(pool_unit));
             }
 
+            if check_requested_collaterals {
+                assert!(
+                    temp_requested_value == dec!(0),
+                    "Insufficient collateral value, {} remaining",
+                    temp_requested_value
+                );
+            }
+
             cdp_data
-                .save_cdp(&self.cdp_res_manager)
+                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                 .expect("Error saving CDP");
 
             (returned_collaterals, returned_collaterals_value)
@@ -1215,7 +1318,17 @@ mod lending_market {
                 |(mut remainers, mut total_payment_value), mut payment| {
                     let pool_res_address = payment.resource_address();
 
-                    let mut pool_state = self._get_pool_state(&pool_res_address);
+                    let mut pool_state = self._get_pool_state(&pool_res_address, None);
+
+                    if for_liquidation {
+                        pool_state
+                            .check_operating_status(OperatingStatusInput::Liquidation(true))
+                            .expect("Liquidation is not enabled for the pool");
+                    } else {
+                        pool_state
+                            .check_operating_status(OperatingStatusInput::Repay(true))
+                            .expect("Borrow is not enabled for the pool");
+                    }
 
                     let unit_ratio = pool_state
                         .get_loan_unit_ratio()
@@ -1229,7 +1342,7 @@ mod lending_market {
                         .checked_truncate(RoundingMode::ToNearestMidpointToEven)
                         .unwrap();
 
-                    // ! Liquidaion
+                    // ! Liquidation
                     if for_liquidation {
                         max_loan_amount *= pool_state.pool_config.loan_close_factor;
                     }
@@ -1239,7 +1352,7 @@ mod lending_market {
                     let mut max_loan_value = (max_loan_amount * pool_state.last_price)
                         .min(pool_borrowed_amount * pool_state.last_price);
 
-                    // ! Liquidaion
+                    // ! Liquidation
                     if payment_value.is_some() {
                         max_loan_value = max_loan_value.min(expected_payment_value);
                         expected_payment_value -= max_loan_value;
@@ -1295,14 +1408,14 @@ mod lending_market {
             }
 
             cdp_data
-                .save_cdp(&self.cdp_res_manager)
+                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                 .expect("Error saving CDP");
 
             if cdp_data.is_delegatee() {
                 delegator_cdp_data
                     .as_mut()
                     .unwrap()
-                    .save_cdp(&self.cdp_res_manager)
+                    .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                     .expect("Error saving CDP");
             }
 
@@ -1312,8 +1425,15 @@ mod lending_market {
         fn _get_pool_state(
             &mut self,
             pool_res_address: &ResourceAddress,
+            operating_status: Option<OperatingStatusInput>,
         ) -> KeyValueEntryRefMut<'_, LendingPoolState> {
             let mut pool_state = self.pool_states.get_mut(pool_res_address).unwrap();
+
+            if let Some(operating_status) = operating_status {
+                pool_state
+                    .check_operating_status(operating_status)
+                    .expect("Invalid operating status");
+            }
 
             pool_state
                 .update_interest_and_price()
@@ -1351,6 +1471,14 @@ mod lending_market {
         fn _validate_cdp_proof(&self, cdp: Proof) -> NonFungibleLocalId {
             let validated_cdp = cdp.check(self.cdp_res_manager.address());
             validated_cdp.as_non_fungible().non_fungible_local_id()
+        }
+
+        fn check_operating_status(&self, value: OperatingStatusInput) {
+            assert!(
+                self.operating_status.check(value.clone()),
+                "{:?} is not allowed for this pool",
+                value
+            );
         }
     }
 }
