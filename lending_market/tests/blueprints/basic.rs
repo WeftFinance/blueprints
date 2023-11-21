@@ -1,10 +1,10 @@
 use std::path::Path;
-use lending_market::{modules::cdp_data::*, lending_market::lending_market::LendingMarket};
+// use lending_market::{modules::cdp_data::*, lending_market::lending_market::LendingMarket};
 use crate::helpers::{
     faucet::FaucetTestHelper, init::TestHelper, market::MarketTestHelper, methods::*,
     price_feed::PriceFeedTestHelper,
 };
-use radix_engine_interface::{prelude::*, blueprints::consensus_manager::TimePrecision};
+use radix_engine_interface::{blueprints::consensus_manager::TimePrecision, prelude::*};
 use scrypto_unit::*;
 
 #[test]
@@ -105,7 +105,7 @@ fn test_deposit_withdraw_borrow_repay() {
     )
     .expect_commit_success();
 
-    market_withdraw(
+    market_remove_collateral(
         &mut helper,
         borrower_key,
         borrower_account,
@@ -130,7 +130,7 @@ fn test_deposit_withdraw_borrow_repay() {
     )
     .expect_commit_success();
 
-    market_withdraw(
+    market_remove_collateral(
         &mut helper,
         borrower_key,
         borrower_account,
@@ -172,20 +172,20 @@ fn test_deposit_withdraw_borrow_repay() {
 }
 
 #[test]
-fn test_instanciate_price_feed() {
+fn test_instantiate_price_feed() {
     let mut test_runner = TestRunnerBuilder::new().build();
     let (owner_public_key, _, owner_account_address) = test_runner.new_allocated_account();
-    let mut helper =
+    let _helper =
         PriceFeedTestHelper::new(&mut test_runner, owner_account_address, owner_public_key);
 }
 
 #[test]
-fn test_instanciate_faucet() {
+fn test_instantiate_faucet() {
     let mut test_runner = TestRunnerBuilder::new().build();
     let (owner_public_key, _, owner_account_address) = test_runner.new_allocated_account();
     let price_feed_helper =
         PriceFeedTestHelper::new(&mut test_runner, owner_account_address, owner_public_key);
-    let helper = FaucetTestHelper::new(
+    let _helper = FaucetTestHelper::new(
         &mut test_runner,
         owner_account_address,
         owner_public_key,
@@ -202,7 +202,7 @@ fn test_create_pool_package_address() {
 }
 
 #[test]
-fn test_instanciate_market() {
+fn test_instantiate_market() {
     let mut test_runner = TestRunnerBuilder::new().build();
     let (owner_public_key, _, owner_account_address) = test_runner.new_allocated_account();
     let price_feed_helper =
@@ -213,7 +213,7 @@ fn test_instanciate_market() {
         owner_public_key,
         &price_feed_helper,
     );
-    let helper = MarketTestHelper::new(
+    let _helper = MarketTestHelper::new(
         &mut test_runner,
         owner_account_address,
         owner_public_key,
@@ -225,14 +225,14 @@ fn test_instanciate_market() {
 #[test]
 fn test_liquidation() {
     let mut helper = TestHelper::new();
-    
 
-    let epoch = helper
-        .test_runner
-        .get_current_epoch();
+    let epoch = helper.test_runner.get_current_epoch();
 
-    print!("Begin {:?}", helper.test_runner.get_current_time(TimePrecision::Minute)); 
-        
+    print!(
+        "Begin {:?}",
+        helper.test_runner.get_current_time(TimePrecision::Minute)
+    );
+
     // SET UP A LP PROVIDER
     let (lp_user_key, _, lp_user_account) = helper.test_runner.new_allocated_account();
     helper.test_runner.load_account_from_faucet(lp_user_account);
@@ -276,7 +276,7 @@ fn test_liquidation() {
 
     let usd = helper.faucet.usdc_resource_address;
 
-    let cdp_id : u64 = 1; 
+    let cdp_id: u64 = 1;
     // // Borrow 400$  Of USD
     market_borrow(
         &mut helper,
@@ -288,27 +288,19 @@ fn test_liquidation() {
     )
     .expect_commit_success();
 
-      
-    helper
-        .test_runner
-        .set_current_epoch(epoch.next().unwrap()); 
+    helper.test_runner.set_current_epoch(epoch.next().unwrap());
 
-        print!("After Borrow {:?}", helper.test_runner.get_current_time(TimePrecision::Minute)); 
+    print!(
+        "After Borrow {:?}",
+        helper.test_runner.get_current_time(TimePrecision::Minute)
+    );
 
     // Change XRD PRICE DROP FROM 0.04 to 0.02
-    admin_update_price(
-            &mut helper,
-            1u64,
-            XRD,
-            dec!(0.02),
-        )
-        .expect_commit_success();
-    
-        helper
-        .test_runner
-        .set_current_epoch(epoch.next().unwrap()); 
-    
-        get_price( &mut helper,XRD).expect_commit_success();
+    admin_update_price(&mut helper, 1u64, XRD, dec!(0.02)).expect_commit_success();
+
+    helper.test_runner.set_current_epoch(epoch.next().unwrap());
+
+    get_price(&mut helper, XRD).expect_commit_success();
 
     // SET UP LIQUIDATOR
     let (liquidator_user_key, _, liquidator_user_account) =
@@ -328,7 +320,7 @@ fn test_liquidation() {
     )
     .expect_commit_failure();
 
-    market_update_pool_state(&mut helper,XRD);
+    market_update_pool_state(&mut helper, XRD);
 
     // let xrd_balance = helper
     //     .test_runner
@@ -363,37 +355,46 @@ fn test_liquidation() {
     //     liquidator_user_account,
     //     payments,
     // ).expect_commit_success();
-
-
 }
 
 #[test]
-pub fn test_flash_loan(){
+pub fn test_flash_loan() {
     let mut helper = TestHelper::new();
-     // SET UP A LP PROVIDER
-     let (lp_user_key, _, lp_user_account) = helper.test_runner.new_allocated_account();
-     helper.test_runner.load_account_from_faucet(lp_user_account);
-     helper.test_runner.load_account_from_faucet(lp_user_account);
-     
-     // Provide 25000 XRD
-     market_contribute(&mut helper, lp_user_key, lp_user_account, XRD, dec!(25_000))
-     .expect_commit_success();
+    // SET UP A LP PROVIDER
+    let (lp_user_key, _, lp_user_account) = helper.test_runner.new_allocated_account();
+    helper.test_runner.load_account_from_faucet(lp_user_account);
+    helper.test_runner.load_account_from_faucet(lp_user_account);
+
+    // Provide 25000 XRD
+    market_contribute(&mut helper, lp_user_key, lp_user_account, XRD, dec!(25_000))
+        .expect_commit_success();
 
     let (user_public_key, _, user_account_address) = helper.test_runner.new_allocated_account();
-    helper.test_runner.load_account_from_faucet(user_account_address);
-    let mut loan_amounts :IndexMap<ResourceAddress, Decimal> = IndexMap::new(); 
+    helper
+        .test_runner
+        .load_account_from_faucet(user_account_address);
+    let mut loan_amounts: IndexMap<ResourceAddress, Decimal> = IndexMap::new();
     let loan_amount = Decimal::from(1000);
-    loan_amounts.insert(XRD , loan_amount); 
-    
-    market_take_batch_flashloan(&mut helper,user_public_key, user_account_address, loan_amounts);
+    loan_amounts.insert(XRD, loan_amount);
 
-    get_resource_flash_loan(&mut helper, user_public_key, user_account_address, loan_amount); 
+    market_take_batch_flashloan(
+        &mut helper,
+        user_public_key,
+        user_account_address,
+        loan_amounts,
+    );
 
-    let mut payments : Vec<(ResourceAddress, Decimal)> = Vec::new();
-    payments.push((XRD,loan_amount + Decimal::from(100))); 
+    get_resource_flash_loan(
+        &mut helper,
+        user_public_key,
+        user_account_address,
+        loan_amount,
+    );
+
+    let mut payments: Vec<(ResourceAddress, Decimal)> = Vec::new();
+    payments.push((XRD, loan_amount + Decimal::from(100)));
     market_repay_batch_flashloan(&mut helper, user_public_key, user_account_address, payments)
-    .expect_commit_success(); 
-
+        .expect_commit_success();
 }
 // #[test]
 // fn test_withdraw() {

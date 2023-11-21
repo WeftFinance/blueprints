@@ -35,7 +35,15 @@ pub fn create_admin_badge(
             }
         ))
         .with_address(address_reservation)
-        .mint_initial_supply([(1u64.into(), AdminBadgeData {})])
+        .mint_initial_supply([
+            (1u64.into(), AdminBadgeData {}),
+            (2u64.into(), AdminBadgeData {}),
+            (3u64.into(), AdminBadgeData {}),
+            (4u64.into(), AdminBadgeData {}),
+            (5u64.into(), AdminBadgeData {}),
+            (6u64.into(), AdminBadgeData {}),
+            (7u64.into(), AdminBadgeData {}),
+        ])
 }
 
 pub fn create_reserve_collector_badge(owner_rule: AccessRule) -> NonFungibleBucket {

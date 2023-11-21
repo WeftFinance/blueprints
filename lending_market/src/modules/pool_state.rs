@@ -1,9 +1,8 @@
+use super::operation_status::*;
 use crate::lending_market::lending_market::*;
 use crate::modules::{interest_strategy::*, liquidation_threshold::*, pool_config::*, utils::*};
 use scrypto::blueprints::consensus_manager::*;
 use scrypto::prelude::*;
-
-use super::operation_status::{OperatingStatus, OperatingStatusInput};
 
 #[derive(ScryptoSbor)]
 pub struct LendingPoolState {
@@ -89,8 +88,8 @@ impl LendingPoolState {
 
     ///* OPERATING STATUS METHODS *///
 
-    pub fn check_operating_status(&self, value: OperatingStatusInput) -> Result<(), String> {
-        if !self.operating_status.check(value.clone()) {
+    pub fn check_operating_status(&self, value: OperatingService) -> Result<(), String> {
+        if !self.operating_status.check(value) {
             return Err("Operation not allowed".to_string());
         }
 
@@ -117,14 +116,14 @@ impl LendingPoolState {
     ///* CORE LOGIC AND UTILITY METHODS *///
 
     pub fn contribute_proxy(&self, assets: Bucket) -> Result<Bucket, String> {
-        let amout = assets.amount();
+        let amount = assets.amount();
 
         let (pool_available_amount, pool_borrowed_amount) = self.pool.get_pooled_amount();
 
-        // Check if the deposit limit is reached
+        // Check if the pool deposit limit is reached
         self.pool_config
             .check_limit(CheckPoolConfigLimitInput::DepositLimit(
-                pool_available_amount + pool_borrowed_amount + amout,
+                pool_available_amount + pool_borrowed_amount + amount,
             ))?;
 
         Ok(self.pool.contribute(assets))
@@ -140,7 +139,7 @@ impl LendingPoolState {
         }
 
         if pool_units.resource_address() != self.collaterals.resource_address() {
-            return Err("Pool unit resource address missmatch".into());
+            return Err("Pool unit resource address mismatch".into());
         }
 
         self.collaterals.put(pool_units);
@@ -166,8 +165,8 @@ impl LendingPoolState {
         ))
     }
 
-    /// Handle request to increse borrowed amount.
-    /// it remove requested liquidity and updated the pool loan state based on input interest startegy
+    /// Handle request to increase borrowed amount.
+    /// it remove requested liquidity and updated the pool loan state based on input interest strategy
     pub fn withdraw_for_borrow(&mut self, amount: Decimal) -> Result<(Bucket, Decimal), String> {
         if amount == 0.into() {
             return Err("Amount must be positive".into());
@@ -204,10 +203,10 @@ impl LendingPoolState {
     }
 
     /// Handle request to decrease borrowed amount.
-    /// it add back liquidity and updated the pool loan state based on input interest startegy
+    /// it add back liquidity and updated the pool loan state based on input interest strategy
     pub fn deposit_for_repay(&mut self, payment: Bucket) -> Result<Decimal, String> {
         if payment.resource_address() != self.pool_res_address {
-            return Err("Payment resource address missmatch".into());
+            return Err("Payment resource address mismatch".into());
         }
 
         let loan_unit = self._update_loan_unit(-payment.amount())?;
@@ -236,22 +235,7 @@ impl LendingPoolState {
 
         // Debounce price update to configured period (in minutes)
         if period_in_minute >= self.pool_config.price_update_period {
-            // TODO: Handle XRD price update
-            // if self.pool_res_address == XRD {
-            //     self.last_price = dec!(1);
-            //     self.price_updated_at = now;
-            //     return Ok(());
-            // }
-
-            let price_feed_result = self
-                .price_feed_comp
-                .call_raw::<Option<PriceInfo>>("get_price", scrypto_args!(self.pool_res_address));
-
-            if price_feed_result.is_none() {
-                return Err("Price feed returned None".to_string());
-            }
-
-            let price_feed_result = price_feed_result.unwrap();
+            let price_feed_result = get_price(self.price_feed_comp, self.pool_res_address)?;
 
             // TODO: Handle price update too old
             // if (now - price_feed_result.timestamp) >= self.pool_config.price_update_period {

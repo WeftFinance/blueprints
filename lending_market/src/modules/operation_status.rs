@@ -1,71 +1,121 @@
 use scrypto::prelude::*;
 
-#[derive(ScryptoSbor, Debug, Clone)]
-pub enum OperatingStatusInput {
-    Contribute(bool),
-    Redeem(bool),
-    Deposit(bool),
-    Withdraw(bool),
-    Borrow(bool),
-    Repay(bool),
-    Refinance(bool),
-    Liquidation(bool),
-    Flashloan(bool),
+#[derive(ScryptoSbor, Debug, Clone, Default)]
+pub struct OperatingStatusValue {
+    enabled: bool,
+    set_by_admin: bool,
 }
 
-#[derive(ScryptoSbor)]
+#[derive(ScryptoSbor, Debug, Clone)]
+pub enum OperatingService {
+    Contribute,
+    Redeem,
+    AddCollateral,
+    RemoveCollateral,
+    Borrow,
+    Repay,
+    Refinance,
+    Liquidation,
+    Flashloan,
+}
+
+#[derive(ScryptoSbor, Default)]
 pub struct OperatingStatus {
-    pub is_contribute_enabled: bool,
-    pub is_redeem_enabled: bool,
-    pub is_deposit_enabled: bool,
-    pub is_withdraw_enabled: bool,
-    pub is_borrow_enabled: bool,
-    pub is_repay_enabled: bool,
-    pub is_refinance_enabled: bool,
-    pub is_liquidate_enabled: bool,
-    pub is_flashloan_enabled: bool,
+    pub is_contribute_enabled: OperatingStatusValue,
+    pub is_redeem_enabled: OperatingStatusValue,
+    pub is_deposit_enabled: OperatingStatusValue,
+    pub is_withdraw_enabled: OperatingStatusValue,
+    pub is_borrow_enabled: OperatingStatusValue,
+    pub is_repay_enabled: OperatingStatusValue,
+    pub is_refinance_enabled: OperatingStatusValue,
+    pub is_liquidate_enabled: OperatingStatusValue,
+    pub is_flashloan_enabled: OperatingStatusValue,
 }
 
 impl OperatingStatus {
-    pub fn default() -> Self {
+    pub fn new() -> Self {
         Self {
-            is_contribute_enabled: true,
-            is_redeem_enabled: true,
-            is_deposit_enabled: true,
-            is_withdraw_enabled: true,
-            is_borrow_enabled: true,
-            is_repay_enabled: true,
-            is_refinance_enabled: true,
-            is_liquidate_enabled: true,
-            is_flashloan_enabled: true,
+            is_contribute_enabled: OperatingStatusValue {
+                enabled: true,
+                set_by_admin: false,
+            },
+            is_redeem_enabled: OperatingStatusValue {
+                enabled: true,
+                set_by_admin: false,
+            },
+            is_deposit_enabled: OperatingStatusValue {
+                enabled: true,
+                set_by_admin: false,
+            },
+            is_withdraw_enabled: OperatingStatusValue {
+                enabled: true,
+                set_by_admin: false,
+            },
+            is_borrow_enabled: OperatingStatusValue {
+                enabled: true,
+                set_by_admin: false,
+            },
+            is_repay_enabled: OperatingStatusValue {
+                enabled: true,
+                set_by_admin: false,
+            },
+            is_refinance_enabled: OperatingStatusValue {
+                enabled: true,
+                set_by_admin: false,
+            },
+            is_liquidate_enabled: OperatingStatusValue {
+                enabled: true,
+                set_by_admin: false,
+            },
+            is_flashloan_enabled: OperatingStatusValue {
+                enabled: true,
+                set_by_admin: false,
+            },
         }
     }
 
-    pub fn update(&mut self, value: OperatingStatusInput) {
-        match value {
-            OperatingStatusInput::Contribute(v) => self.is_contribute_enabled = v,
-            OperatingStatusInput::Redeem(v) => self.is_redeem_enabled = v,
-            OperatingStatusInput::Deposit(v) => self.is_deposit_enabled = v,
-            OperatingStatusInput::Withdraw(v) => self.is_withdraw_enabled = v,
-            OperatingStatusInput::Borrow(v) => self.is_borrow_enabled = v,
-            OperatingStatusInput::Repay(v) => self.is_repay_enabled = v,
-            OperatingStatusInput::Refinance(v) => self.is_refinance_enabled = v,
-            OperatingStatusInput::Liquidation(v) => self.is_liquidate_enabled = v,
-            OperatingStatusInput::Flashloan(v) => self.is_flashloan_enabled = v,
+    pub fn update(
+        &mut self,
+        operating_status: OperatingService,
+        enabled: bool,
+        set_by_admin: bool,
+    ) -> Result<(), String> {
+        let field = match operating_status {
+            OperatingService::Contribute => &mut self.is_contribute_enabled,
+            OperatingService::Redeem => &mut self.is_redeem_enabled,
+            OperatingService::AddCollateral => &mut self.is_deposit_enabled,
+            OperatingService::RemoveCollateral => &mut self.is_withdraw_enabled,
+            OperatingService::Borrow => &mut self.is_borrow_enabled,
+            OperatingService::Repay => &mut self.is_repay_enabled,
+            OperatingService::Refinance => &mut self.is_refinance_enabled,
+            OperatingService::Liquidation => &mut self.is_liquidate_enabled,
+            OperatingService::Flashloan => &mut self.is_flashloan_enabled,
+        };
+
+        if field.set_by_admin && !set_by_admin {
+            return Err(format!(
+                "The operating status for {:?} is set by admin",
+                operating_status
+            ));
         }
+
+        field.enabled = enabled;
+        field.set_by_admin = set_by_admin;
+
+        Ok(())
     }
 
-    pub fn check(&self, value: OperatingStatusInput) -> bool {
+    pub fn check(&self, value: OperatingService) -> bool {
         match value {
-            OperatingStatusInput::Contribute(v) => self.is_contribute_enabled == v,
-            OperatingStatusInput::Redeem(v) => self.is_redeem_enabled == v,
-            OperatingStatusInput::Deposit(v) => self.is_deposit_enabled == v,
-            OperatingStatusInput::Withdraw(v) => self.is_withdraw_enabled == v,
-            OperatingStatusInput::Borrow(v) => self.is_borrow_enabled == v,
-            OperatingStatusInput::Repay(v) => self.is_repay_enabled == v,
-            OperatingStatusInput::Refinance(v) => self.is_refinance_enabled == v,
-            OperatingStatusInput::Liquidation(v) => self.is_liquidate_enabled == v,
-            OperatingStatusInput::Flashloan(v) => self.is_flashloan_enabled == v,
+            OperatingService::Contribute => self.is_contribute_enabled.enabled,
+            OperatingService::Redeem => self.is_redeem_enabled.enabled,
+            OperatingService::AddCollateral => self.is_deposit_enabled.enabled,
+            OperatingService::RemoveCollateral => self.is_withdraw_enabled.enabled,
+            OperatingService::Borrow => self.is_borrow_enabled.enabled,
+            OperatingService::Repay => self.is_repay_enabled.enabled,
+            OperatingService::Refinance => self.is_refinance_enabled.enabled,
+            OperatingService::Liquidation => self.is_liquidate_enabled.enabled,
+            OperatingService::Flashloan => self.is_flashloan_enabled.enabled,
         }
     }
 }
