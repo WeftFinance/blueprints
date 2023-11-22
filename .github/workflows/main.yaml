@@ -24,13 +24,22 @@ jobs:
         run: |
           rustup update
           rustup component add clippy
-          rustup install nightly          
+          rustup install nightly 
+          git clone https://github.com/radixdlt/radixdlt-scrypto.git
+          cd radixdlt-scrypto
+          cargo install --path ./simulator         
 
       - name: Toolchain info
         run: |
           cargo --version --verbose
           rustc --version
-          cargo clippy --version          
+          cargo clippy --version   
+          scrypto --version
+
+      - name: Build
+        run: |
+          cd lending_market
+          scrypto build     
 
       - name: Lint lending_market
         run: |
@@ -42,4 +51,4 @@ jobs:
         run: |
           cd lending_market
           cargo check
-          cargo test --all                
+          cargo test --all    
