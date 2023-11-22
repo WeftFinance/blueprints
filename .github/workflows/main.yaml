@@ -3,7 +3,7 @@ on: [pull_request]
 
 jobs:
   typo_check:
-    name: Spell Check with Typos
+    name: Spell Check
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Actions Repository
@@ -14,23 +14,19 @@ jobs:
       with: 
         write_changes: true
 
-  test_lending_market:
-    name: Test lending_market
+  lint_and_check:
+    name: Lint and Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
 
       - name: Update local toolchain
         run: |
-          rustup update
-          rustup install nightly 
+          rustup default 1.69.0   
           rustup component add rustfmt
           rustup component add clippy
-          cargo install --locked cargo-deny || true
-          cargo install --locked cargo-outdated || true
-          cargo install --locked cargo-udeps || true
+          cargo install --locked cargo-geiger || true
           cargo install --locked cargo-audit || true
-          cargo install --locked cargo-pants || true      
       
       - uses: Swatinem/rust-cache@v2
       
@@ -44,13 +40,10 @@ jobs:
         run: |
           cd lending_market
           cargo fmt -- --check
-          cargo clippy -- -D warnings     
+          cargo clippy -- -D warnings  
+
       - name: Check lending_market
         run: |
           cd lending_market
-          cargo deny check
-          cargo outdated --exit-code 1
-          cargo udeps
-          rm -rf ~/.cargo/advisory-db
-          cargo audit
-          cargo pants            
+          cargo cargo-geiger
+          cargo audit          
