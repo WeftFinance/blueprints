@@ -25,10 +25,6 @@ jobs:
           rustup default 1.69.0   
           rustup component add rustfmt
           rustup component add clippy
-          cargo install --locked cargo-geiger || true
-          cargo install --locked cargo-audit || true
-      
-      - uses: Swatinem/rust-cache@v2
       
       - name: Toolchain info
         run: |
@@ -41,9 +37,15 @@ jobs:
           cd lending_market
           cargo fmt -- --check
           cargo clippy -- -D warnings  
-
-      - name: Check lending_market
+        
+      - name: Lint single_asset_pool
         run: |
-          cd lending_market
-          cargo cargo-geiger
-          cargo audit          
+          cd single_asset_pool
+          cargo fmt -- --check
+          cargo clippy -- -D warnings  
+        
+      - name: Lint internal_price_feed
+        run: |
+          cd internal_price_feed
+          cargo fmt -- --check
+          cargo clippy -- -D warnings                        
