@@ -26,6 +26,7 @@ jobs:
           # rustup install nightly 
           rustup default 1.69.0
           rustup target add wasm32-unknown-unknown
+          rustup component add rustfmt
           rustup component add clippy
           git clone https://github.com/radixdlt/radixdlt-scrypto.git
           cd radixdlt-scrypto
