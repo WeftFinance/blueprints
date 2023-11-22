@@ -13,7 +13,7 @@ pub struct MarketTestHelper {
     pub cdp_resource_address: ResourceAddress,
     pub market_admin_badge: ResourceAddress,
     pub market_reserve_collector_badge: ResourceAddress,
-    pub liquidation_term_resource_address : ResourceAddress,
+    pub liquidation_term_resource_address: ResourceAddress,
     pub pools: IndexMap<ResourceAddress, (ComponentAddress, ResourceAddress)>,
 }
 
@@ -27,7 +27,7 @@ impl MarketTestHelper {
     ) -> MarketTestHelper {
         let _pool_package_address =
             test_runner.compile_and_publish(Path::new("../single_resource_pool"));
-        
+
         // DONT REMOVE VERY IMPORTANT : ALLOW TO FIND THE PACKAGE ADDRESS OF single_resource_pool ON THE RTM file
         // let manifest = ManifestBuilder::new()
         //     .lock_fee_from_faucet()
@@ -81,7 +81,7 @@ impl MarketTestHelper {
 
         // // Pools
 
-             let mut pools = IndexMap::new();
+        let mut pools = IndexMap::new();
 
         // // Initialize XRD lending pool
 
