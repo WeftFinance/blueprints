@@ -22,12 +22,8 @@ impl TestHelper {
         let (owner_public_key, owner_private_key, owner_account_address) =
             test_runner.new_allocated_account();
 
-
-        let price_feed = PriceFeedTestHelper::new(
-            &mut test_runner,
-            owner_account_address,
-            owner_public_key
-        );
+        let price_feed =
+            PriceFeedTestHelper::new(&mut test_runner, owner_account_address, owner_public_key);
 
         let faucet = FaucetTestHelper::new(
             &mut test_runner,
