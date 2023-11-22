@@ -61,8 +61,10 @@ pub fn get_resource_flash_loan(
     user_public_key: Secp256k1PublicKey,
     user_account_address: ComponentAddress,
     xrd_amount: Decimal,
-) -> TransactionReceipt {
-    let manifest_builder_0 = ManifestBuilder::new()
+    manifest_builder :  ManifestBuilder
+)  {
+
+    manifest_builder
         .lock_fee_from_faucet()
         .take_from_worktop(XRD, xrd_amount, "xrd_bucket")
         .with_name_lookup(|builder, lookup| {
@@ -73,11 +75,6 @@ pub fn get_resource_flash_loan(
                 manifest_args!(helper.faucet.usdc_resource_address, xrd_buket),
             )
         });
-
-    helper.test_runner.execute_manifest(
-        build_and_dumb_to_fs(manifest_builder_0, "get_resource".into()),
-        vec![NonFungibleGlobalId::from_public_key(&user_public_key)],
-    )
 }
 
 pub fn get_resource(
@@ -490,19 +487,15 @@ pub fn market_take_batch_flashloan(
     user_public_key: Secp256k1PublicKey,
     user_account_address: ComponentAddress,
     loan_amounts: IndexMap<ResourceAddress, Decimal>,
-) -> TransactionReceipt {
-    let mut manifest_builder = ManifestBuilder::new()
+    manifest_builder :   ManifestBuilder
+)  {
+     manifest_builder 
         .lock_fee_from_faucet()
         .call_method(
             helper.market.market_component_address,
             "take_batch_flashloan",
             manifest_args!(loan_amounts),
         );
-
-    helper.test_runner.execute_manifest(
-        build_and_dumb_to_fs(manifest_builder, "take_batch_flashloan".into()),
-        vec![NonFungibleGlobalId::from_public_key(&user_public_key)],
-    )
 }
 
 pub fn market_repay_batch_flashloan(
@@ -510,9 +503,10 @@ pub fn market_repay_batch_flashloan(
     user_public_key: Secp256k1PublicKey,
     user_account_address: ComponentAddress,
     payments: Vec<(ResourceAddress, Decimal)>,
-) -> TransactionReceipt {
+     manifest_builder : ManifestBuilder
+)  {
     let mut payment_buckets = Vec::<ManifestBucket>::new();
-    let manifest_builder = ManifestBuilder::new()
+    manifest_builder
         .lock_fee_from_faucet()
         .take_from_worktop(
             helper.market.batch_flashloan_resource_address,
@@ -547,11 +541,6 @@ pub fn market_repay_batch_flashloan(
                 manifest_args!(payment_buckets, flash_loan_term_bucket),
             ).deposit_batch(user_account_address)
         });
-
-    helper.test_runner.execute_manifest(
-        build_and_dumb_to_fs(manifest_builder, "repay_batch_flashloan".into()),
-        vec![NonFungibleGlobalId::from_public_key(&user_public_key)],
-    )
 }
 
 // fn generic_txm(manifest_builder: ManifestBuilder) -> ManifestBuilder {
