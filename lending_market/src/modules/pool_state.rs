@@ -251,16 +251,26 @@ impl LendingPoolState {
         Ok(-loan_unit)
     }
 
-    pub fn update_interest_and_price(&mut self) -> Result<(), String> {
+    pub fn update_interest_and_price(
+        &mut self,
+        bypass_debounce: Option<(bool, bool)>,
+    ) -> Result<(), String> {
         let before = self.interest_updated_at;
         let now: i64 = Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch;
 
         let period_in_minute = (now - before) / 60;
 
+        info!("period_in_minute: {}", period_in_minute);
+
+        let (price_bypass_debounce, interest_bypass_debounce) =
+            bypass_debounce.unwrap_or((false, false));
+
         /* UPDATING PRICE */
 
         // Debounce price update to configured period (in minutes)
-        if period_in_minute >= self.pool_config.price_update_period {
+        if period_in_minute >= self.pool_config.price_update_period || price_bypass_debounce {
+            info!("price update bypass: {:?}", bypass_debounce);
+
             let price_feed_result = get_price(self.price_feed_comp, self.pool_res_address)?;
 
             // Handle price update too old
@@ -280,7 +290,9 @@ impl LendingPoolState {
         /* UPDATING INTEREST RATE */
 
         // Debounce interest update to configured period (in minutes)
-        if period_in_minute >= self.pool_config.interest_update_period {
+        if period_in_minute >= self.pool_config.interest_update_period || interest_bypass_debounce {
+            info!("interest update bypass: {:?}", bypass_debounce);
+
             let (pool_available_amount, pool_borrowed_amount) = self.pool.get_pooled_amount();
 
             let pool_total_liquidity = pool_available_amount + pool_borrowed_amount;

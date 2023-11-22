@@ -482,6 +482,56 @@ pub fn market_end_liquidation(
     )
 }
 
+pub fn market_fast_liquidation(
+    helper: &mut TestHelper,
+    user_public_key: Secp256k1PublicKey,
+    user_account_address: ComponentAddress,
+    cdp_id: u64,
+    payments: Vec<(ResourceAddress, Decimal)>,
+    requested_collaterals: Vec<ResourceAddress>,
+) -> TransactionReceipt {
+    let mut payment_buckets = Vec::<ManifestBucket>::new();
+    let manifest_builder = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .with_name_lookup(|builder, _lookup| {
+            let (_, newbuilder) =
+                payments
+                    .iter()
+                    .fold((0, builder), |(i, builder), (res_address, amount)| {
+                        (
+                            i,
+                            builder
+                                .withdraw_from_account(user_account_address, *res_address, *amount)
+                                .take_all_from_worktop(
+                                    *res_address,
+                                    format!("payment_bucket_{}", i),
+                                )
+                                .with_name_lookup(|builder, lookup| {
+                                    payment_buckets
+                                        .push(lookup.bucket(format!("payment_bucket_{}", i)));
+                                    builder
+                                }),
+                        )
+                    });
+
+            newbuilder.call_method(
+                helper.market.market_component_address,
+                "fast_liquidation",
+                manifest_args!(
+                    NonFungibleLocalId::integer(cdp_id),
+                    payment_buckets,
+                    requested_collaterals
+                ),
+            )
+        })
+        .deposit_batch(user_account_address);
+
+    helper.test_runner.execute_manifest(
+        build_and_dumb_to_fs(manifest_builder, "start_liquidation".into()),
+        vec![NonFungibleGlobalId::from_public_key(&user_public_key)],
+    )
+}
+
 pub fn market_take_batch_flashloan(
     helper: &mut TestHelper,
     user_public_key: Secp256k1PublicKey,

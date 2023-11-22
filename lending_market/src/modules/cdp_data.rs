@@ -4,6 +4,7 @@ use scrypto::prelude::*;
 #[derive(ScryptoSbor, Clone, PartialEq, Debug)]
 pub struct DelegatorInfo {
     pub cdp_id: NonFungibleLocalId,
+    pub delegatee_index: u64,
     pub max_loan_value: Option<Decimal>,
     pub max_loan_value_ratio: Option<Decimal>,
 }
@@ -11,6 +12,7 @@ pub struct DelegatorInfo {
 #[derive(ScryptoSbor, Clone, PartialEq, Debug)]
 pub struct DelegateeInfo {
     pub delegatee_count: u64,
+    pub linked_count: u64,
 }
 
 #[derive(ScryptoSbor, Clone, PartialEq, Debug)]
@@ -113,15 +115,21 @@ impl WrappedCDPData {
         Self::get_units(&self.cdp_data.loans, loan)
     }
 
-    pub fn increase_delegatee_count(&mut self) -> Result<(), String> {
+    //
+
+    pub fn increase_delegatee_count(&mut self) -> Result<(u64, u64), String> {
         let result = match &mut self.cdp_data.cdp_type {
             CDPType::Delegator(delegatee_info) => {
                 delegatee_info.delegatee_count += 1;
-                Ok(())
+                delegatee_info.linked_count += 1;
+                Ok((delegatee_info.delegatee_count, delegatee_info.linked_count))
             }
             CDPType::Standard => {
-                self.cdp_data.cdp_type = CDPType::Delegator(DelegateeInfo { delegatee_count: 1 });
-                Ok(())
+                self.cdp_data.cdp_type = CDPType::Delegator(DelegateeInfo {
+                    delegatee_count: 1,
+                    linked_count: 1,
+                });
+                Ok((1u64, 1u64))
             }
             CDPType::Delegatee(_) => {
                 Err("WrappedCDPData/increase_delegatee_count: CDP is not delegator".into())
@@ -155,6 +163,22 @@ impl WrappedCDPData {
     pub fn update_cdp_type(&mut self, cdp_type: CDPType) {
         self.cdp_data.cdp_type = cdp_type;
         self.cdp_type_updated = true;
+    }
+
+    pub fn update_delegatee_info(
+        &mut self,
+        max_loan_value: Option<Decimal>,
+        max_loan_value_ratio: Option<Decimal>,
+    ) -> Result<(), String> {
+        if let CDPType::Delegatee(delegatee_info) = &mut self.cdp_data.cdp_type {
+            delegatee_info.max_loan_value = max_loan_value;
+            delegatee_info.max_loan_value_ratio = max_loan_value_ratio;
+
+            self.cdp_type_updated = true;
+            Ok(())
+        } else {
+            Err("WrappedCDPData/update_delegatee_info: CDP is not delegatee".into())
+        }
     }
 
     pub fn update_collateral(
