@@ -191,6 +191,9 @@ mod lending_market {
 
         ///
         market_config: MarketConfig,
+
+        ///
+        delegatee_cdp_ids: KeyValueStore<(NonFungibleLocalId, u64), NonFungibleLocalId>,
     }
 
     impl LendingMarket {
@@ -250,6 +253,7 @@ mod lending_market {
                 listed_assets: IndexSet::new(),
                 operating_status: OperatingStatus::new(),
                 market_config,
+                delegatee_cdp_ids: KeyValueStore::new(),
             }
             .instantiate()
             .prepare_to_globalize(OwnerRole::None)
@@ -561,14 +565,22 @@ mod lending_market {
                 "Delegatee CDP can not create delegatee CDP",
             );
 
-            delegator_cdp_data
+            let (_, linked_count) = delegator_cdp_data
                 .increase_delegatee_count()
                 .expect("Error increasing delegatee count");
+
             delegator_cdp_data
                 .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
                 .expect("Error saving CDP");
 
             let now = Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch;
+
+            let new_cdp_id = self._get_new_cdp_id();
+
+            self.delegatee_cdp_ids.insert(
+                (delegator_cdp_id.clone(), linked_count),
+                NonFungibleLocalId::Integer(new_cdp_id.into()),
+            );
 
             let delegatee_cdp_data = CollaterizedDebtPositionData {
                 name: name.unwrap_or("".into()),
@@ -576,6 +588,7 @@ mod lending_market {
                 key_image_url: key_image_url.unwrap_or("".into()),
                 cdp_type: CDPType::Delegatee(DelegatorInfo {
                     cdp_id: delegator_cdp_id,
+                    delegatee_index: linked_count,
                     max_loan_value_ratio,
                     max_loan_value,
                 }),
@@ -586,7 +599,7 @@ mod lending_market {
                 updated_at: now,
             };
 
-            let delegatee_cdp_id = NonFungibleLocalId::Integer(self._get_new_cdp_id().into());
+            let delegatee_cdp_id = NonFungibleLocalId::Integer(new_cdp_id.into());
             self.cdp_res_manager
                 .mint_non_fungible(&delegatee_cdp_id, delegatee_cdp_data)
         }
@@ -631,12 +644,13 @@ mod lending_market {
             let mut delegator_cdp_data =
                 WrappedCDPData::new(&self.cdp_res_manager, &delegator_cdp_id);
 
-            delegator_cdp_data
+            let (_, linked_count) = delegator_cdp_data
                 .increase_delegatee_count()
                 .expect("Error increasing delegatee count");
 
             delegatee_cdp_data.update_cdp_type(CDPType::Delegatee(DelegatorInfo {
-                cdp_id: delegator_cdp_id,
+                cdp_id: delegator_cdp_id.clone(),
+                delegatee_index: linked_count,
                 max_loan_value_ratio,
                 max_loan_value,
             }));
@@ -648,6 +662,9 @@ mod lending_market {
             )
             .check_cdp()
             .expect("Error checking CDP");
+
+            self.delegatee_cdp_ids
+                .insert((delegator_cdp_id, linked_count), delegatee_cdp_id);
 
             delegator_cdp_data
                 .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
@@ -678,19 +695,24 @@ mod lending_market {
                 "Delegatee CDP not linked to provided delegator CDP",
             );
 
+            if let CDPType::Delegatee(delegatee_cdp_data) = delegatee_cdp_data.get_type() {
+                self.delegatee_cdp_ids
+                    .remove(&(delegator_cdp_id, delegatee_cdp_data.delegatee_index));
+            }
+
             delegatee_cdp_data.update_cdp_type(CDPType::Standard);
 
             CDPHealthChecker::new(&delegatee_cdp_data, None, &mut self.pool_states)
                 .check_cdp()
                 .expect("Error checking CDP");
 
-            delegatee_cdp_data
-                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                .expect("Error saving CDP");
-
             delegator_cdp_data
                 .decrease_delegatee_count()
                 .expect("Error decreasing delegatee count");
+
+            delegatee_cdp_data
+                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
+                .expect("Error saving CDP");
 
             delegator_cdp_data
                 .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
@@ -759,11 +781,9 @@ mod lending_market {
                 "Delegatee CDP not linked to provided delegator CDP",
             );
 
-            delegatee_cdp_data.update_cdp_type(CDPType::Delegatee(DelegatorInfo {
-                cdp_id: delegator_cdp_id,
-                max_loan_value,
-                max_loan_value_ratio,
-            }));
+            delegatee_cdp_data
+                .update_delegatee_info(max_loan_value, max_loan_value_ratio)
+                .expect("Error updating delegatee info");
 
             delegatee_cdp_data
                 .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
@@ -1519,7 +1539,7 @@ mod lending_market {
         }
 
         fn _get_cdp_data(
-            &self,
+            &mut self,
             cdp_id: &NonFungibleLocalId,
             get_delegator_cdp_data: bool,
         ) -> (WrappedCDPData, Option<WrappedCDPData>) {
