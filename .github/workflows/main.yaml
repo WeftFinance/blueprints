@@ -1,9 +1,21 @@
-name: Test GitHub Action
+name: Lending Market CI
 on: [pull_request]
 
 jobs:
+  typo_check:
+    name: Spell Check with Typos
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Actions Repository
+      uses: actions/checkout@v2
 
-  test_phaser:
+    - name: Writes changes in the local checkout
+      uses: crate-ci/typos@master
+      with: 
+        write_changes: true
+
+  test_lending_market:
+    name: Test lending_market
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
