@@ -1,6 +1,6 @@
 source ./create_cdp.sh 
 
-resim set-current-time 2023-11-22T23:01:50Z
+resim set-current-time 2023-11-22T23:03:50Z
 
 echo "CALL_METHOD
     Address(\"$BORROWER_ADDRESS\")
@@ -40,7 +40,7 @@ echo "CALL_METHOD
 
 resim run tx.rtm
 
-resim set-current-time 2023-11-23T23:01:50Z
+resim set-current-time 2023-11-22T23:05:50Z
 
 resim set-default-account $OWNER_ADDRESS  $OWNER_PVKEY $OWNER_NONFUNGIBLEGLOBALID
 
@@ -53,4 +53,5 @@ echo "CALL_METHOD Address(\"$PRICE_FEED_COMPONENT_ADDRESS\") \"admin_update_pric
 echo "CALL_METHOD Address(\"$OWNER_ADDRESS\") \"deposit_batch\" Expression(\"ENTIRE_WORKTOP\");" >> tx.rtm
 
 resim run tx.rtm
+
 

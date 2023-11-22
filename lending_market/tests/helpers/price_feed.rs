@@ -52,6 +52,4 @@ impl PriceFeedTestHelper {
             price_feed_updater_badge,
         }
     }
-
-   
 }

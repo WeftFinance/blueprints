@@ -62,7 +62,7 @@ impl PositionData {
     }
 }
 
-/// Extends the collateral position with necessery information for the CDP health check
+/// Extends the collateral position with necessary information for the CDP health check
 #[derive(ScryptoSbor, Clone)]
 pub struct ExtendedCollateralPositionData {
     pub pool_res_address: ResourceAddress,
@@ -93,7 +93,7 @@ impl ExtendedCollateralPositionData {
     }
 }
 
-/// Extends the loan position with necessery information for the CDP health check
+/// Extends the loan position with necessary information for the CDP health check
 #[derive(ScryptoSbor, Clone)]
 pub struct ExtendedLoanPositionData {
     pub pool_res_address: ResourceAddress,
@@ -151,8 +151,8 @@ impl ExtendedLoanPositionData {
 }
 
 ///
-/// Extends the CDP with necessery information for the CDP health check and call method of the related lending pool
-/// In addition the Extended CDP can combine mulitiple CDP and perform health check on the batch. this is usefull for delegatee CDP
+/// Extends the CDP with necessary information for the CDP health check and call method of the related lending pool
+/// In addition the Extended CDP can combine multiple CDP and perform health check on the batch. this is useful for delegatee CDP
 ///
 #[derive(ScryptoSbor, Clone)]
 pub struct CDPHealthChecker {
@@ -343,7 +343,7 @@ impl CDPHealthChecker {
             };
 
             if !loan_value_check {
-                return Err("Loan value need to be lower than setted limit".into());
+                return Err("Loan value need to be lower than set limit".into());
             }
 
             let loan_value_ratio_check = match delagator_info.max_loan_value_ratio {
@@ -352,7 +352,7 @@ impl CDPHealthChecker {
             };
 
             if !loan_value_ratio_check {
-                return Err("Loan value ratio need to be lower than setted limit".into());
+                return Err("Loan value ratio need to be lower than set limit".into());
             }
         };
 
@@ -541,7 +541,7 @@ impl CDPHealthChecker {
             },
         )?;
 
-        // Calculate total discounted collateral value wich is the sum of all discounted collateral value
+        // Calculate total discounted collateral value which is the sum of all discounted collateral value
         let total_discounted_collateral_value = if total_loan_value == 0.into() {
             Decimal::ZERO
         } else {

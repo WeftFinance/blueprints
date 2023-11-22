@@ -1,0 +1,51 @@
+name: Lending Market CI
+on: [pull_request]
+
+jobs:
+  typo_check:
+    name: Spell Check
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Actions Repository
+      uses: actions/checkout@v2
+
+    - name: Writes changes in the local checkout
+      uses: crate-ci/typos@master
+      with: 
+        write_changes: true
+
+  lint_and_check:
+    name: Lint and Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Update local toolchain
+        run: |
+          rustup default 1.69.0   
+          rustup component add rustfmt
+          rustup component add clippy
+      
+      - name: Toolchain info
+        run: |
+          cargo --version --verbose
+          rustc --version
+          cargo clippy --version   
+
+      - name: Lint lending_market
+        run: |
+          cd lending_market
+          cargo fmt -- --check
+          cargo clippy -- -D warnings  
+        
+      - name: Lint single_resource_pool
+        run: |
+          cd single_resource_pool
+          cargo fmt -- --check
+          cargo clippy -- -D warnings  
+        
+      - name: Lint internal_price_feed
+        run: |
+          cd internal_price_feed
+          cargo fmt -- --check
+          cargo clippy -- -D warnings                        

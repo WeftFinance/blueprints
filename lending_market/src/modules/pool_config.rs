@@ -3,7 +3,10 @@ use scrypto::prelude::*;
 
 #[derive(ScryptoSbor)]
 pub enum UpdatePoolConfigInput {
-    LendingFeeRate(Decimal),
+    ProtocolInterestFeeRate(Decimal),
+    ProtocolFlashloanFeeRate(Decimal),
+    ProtocolLiquidationFeeRate(Decimal),
+
     FlashloanFeeRate(Decimal),
 
     DepositLimit(Option<Decimal>),
@@ -14,7 +17,9 @@ pub enum UpdatePoolConfigInput {
     LiquidationBonusRate(Decimal),
     LoanCloseFactor(Decimal),
 
+    InterestUpdatePeriod(i64),
     PriceUpdatePeriod(i64),
+    PriceExpirationPeriod(i64),
 }
 
 pub enum CheckPoolConfigLimitInput {
@@ -25,7 +30,10 @@ pub enum CheckPoolConfigLimitInput {
 
 #[derive(ScryptoSbor, Clone)]
 pub struct PoolConfig {
-    pub lending_fee_rate: Decimal,
+    pub protocol_interest_fee_rate: Decimal,
+    pub protocol_flashloan_fee_rate: Decimal,
+    pub protocol_liquidation_fee_rate: Decimal,
+
     pub flashloan_fee_rate: Decimal,
 
     pub asset_type: u8,
@@ -37,12 +45,22 @@ pub struct PoolConfig {
     pub borrow_limit: Option<Decimal>,
     pub utilization_limit: Option<Decimal>,
 
+    pub interest_update_period: i64,
     pub price_update_period: i64,
+    pub price_expiration_period: i64,
 }
 impl PoolConfig {
     pub fn check(&self) -> Result<(), String> {
-        if !is_valid_rate(self.lending_fee_rate) {
+        if !is_valid_rate(self.protocol_interest_fee_rate) {
             return Err("Lending fee rate must be between 0 and 1".into());
+        }
+
+        if !is_valid_rate(self.protocol_flashloan_fee_rate) {
+            return Err("Flashloan fee rate must be between 0 and 1".into());
+        }
+
+        if !is_valid_rate(self.protocol_liquidation_fee_rate) {
+            return Err("Liquidation fee rate must be between 0 and 1".into());
         }
 
         if !is_valid_rate(self.flashloan_fee_rate) {
@@ -73,11 +91,23 @@ impl PoolConfig {
             return Err("Price update period must be greater than 0".into());
         }
 
+        if self.price_expiration_period <= 0 {
+            return Err("Price expiration period must be greater than 0".into());
+        }
+
+        if self.price_expiration_period <= self.price_update_period {
+            return Err("Price expiration period must be greater than price update period".into());
+        }
+
+        if self.interest_update_period <= 0 {
+            return Err("Interest update period must be greater than 0".into());
+        }
+
         Ok(())
     }
 
-    pub fn update_config(&mut self, pool_config: UpdatePoolConfigInput) -> Result<(), String> {
-        match pool_config {
+    pub fn update(&mut self, pool_config_input: UpdatePoolConfigInput) -> Result<(), String> {
+        match pool_config_input {
             UpdatePoolConfigInput::DepositLimit(deposit_limit) => {
                 if deposit_limit.is_some() && deposit_limit.unwrap() < dec!(0) {
                     return Err("Deposit limit must be positive".into());
@@ -110,12 +140,28 @@ impl PoolConfig {
                 self.flashloan_fee_rate = flashloan_fee_rate;
             }
 
-            UpdatePoolConfigInput::LendingFeeRate(lending_fee_rate) => {
-                if !is_valid_rate(lending_fee_rate) {
+            UpdatePoolConfigInput::ProtocolInterestFeeRate(fee_rate) => {
+                if !is_valid_rate(fee_rate) {
                     return Err("Lending fee rate must be between 0 and 1".into());
                 }
 
-                self.lending_fee_rate = lending_fee_rate;
+                self.protocol_interest_fee_rate = fee_rate;
+            }
+
+            UpdatePoolConfigInput::ProtocolFlashloanFeeRate(fee_rate) => {
+                if !is_valid_rate(fee_rate) {
+                    return Err("Flashloan fee rate must be between 0 and 1".into());
+                }
+
+                self.protocol_flashloan_fee_rate = fee_rate;
+            }
+
+            UpdatePoolConfigInput::ProtocolLiquidationFeeRate(fee_rate) => {
+                if !is_valid_rate(fee_rate) {
+                    return Err("Liquidation fee rate must be between 0 and 1".into());
+                }
+
+                self.protocol_liquidation_fee_rate = fee_rate;
             }
 
             UpdatePoolConfigInput::LiquidationBonusRate(liquidation_bonus_rate) => {
@@ -138,12 +184,34 @@ impl PoolConfig {
                 self.asset_type = asset_type;
             }
 
+            UpdatePoolConfigInput::InterestUpdatePeriod(interest_update_period) => {
+                if interest_update_period <= 0 {
+                    return Err("Interest update period must be greater than 0".into());
+                }
+
+                self.interest_update_period = interest_update_period;
+            }
+
             UpdatePoolConfigInput::PriceUpdatePeriod(price_update_period) => {
                 if price_update_period <= 0 {
                     return Err("Price update period must be greater than 0".into());
                 }
 
                 self.price_update_period = price_update_period;
+            }
+
+            UpdatePoolConfigInput::PriceExpirationPeriod(price_expiration_period) => {
+                if price_expiration_period <= 0 {
+                    return Err("Price expiration period must be greater than 0".into());
+                }
+
+                if price_expiration_period <= self.price_update_period {
+                    return Err(
+                        "Price expiration period must be greater than price update period".into(),
+                    );
+                }
+
+                self.price_expiration_period = price_expiration_period;
             }
         };
 
@@ -186,9 +254,4 @@ impl PoolConfig {
 
         Ok(())
     }
-}
-
-#[derive(ScryptoSbor, Clone)]
-pub struct MarketConfig {
-    pub max_cdp_position: u8,
 }

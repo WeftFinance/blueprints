@@ -263,16 +263,16 @@ pub mod staking_pool {
                 "Invalid withdrawal transient provided"
             );
 
-            let asset_ammount = withdrawal_data.value / self.get_price(self.pool_res_address);
+            let asset_amount = withdrawal_data.value / self.get_price(self.pool_res_address);
 
             assert!(
-                assets.amount() >= asset_ammount,
+                assets.amount() >= asset_amount,
                 "Insufficient assets provided"
             );
 
             self.asset_pool.protected_deposit(
                 assets.take_advanced(
-                    asset_ammount,
+                    asset_amount,
                     WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
                 ),
                 DepositType::LiquidityAddition,
@@ -377,7 +377,7 @@ pub mod staking_pool {
                 _ => panic!("Invalid withdrawal transient provided"),
             };
 
-            let (remainer, payment_value) = self._refinance(market_comp_index, cdp_id, payments);
+            let (remainder, payment_value) = self._refinance(market_comp_index, cdp_id, payments);
 
             let payment_check = ((payment_value - expected_payment_value) / payment_value)
                 .checked_abs()
@@ -392,7 +392,7 @@ pub mod staking_pool {
             self.fees_withdrawal_term_res_manager
                 .burn(withdrawal_trensient);
 
-            remainer
+            remainder
         }
 
         //

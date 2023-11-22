@@ -4,6 +4,8 @@ set -e
 
 resim reset
 
+resim set-current-time 2023-11-22T23:01:50Z
+
 XRD=resource_sim1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxakj8n3
 
 echo "Admin account"
@@ -67,8 +69,7 @@ echo "CALL_FUNCTION
     Address(\"$LENDING_MARKET_PACKAGE\")
     \"LendingMarket\"
     \"instantiate\"
-    Enum<0u8>()
-    Enum<0u8>()
+    Tuple(10u8,)
 ;" >> tx.rtm
 
 echo "CALL_METHOD
@@ -78,6 +79,7 @@ echo "CALL_METHOD
 ;" >> tx.rtm
 
 RESULT=$(resim run "tx.rtm")
+
 
 export LENDING_MARKET_COMPONENT_ADDRESS=$(echo "$RESULT" | sed -nr "s/.*Component: ([[:alnum:]_]+)/\1/p" | sed '1!d')
 export LENDING_MARKET_ADMIN_ADDRESS=$(echo "$RESULT" | sed -nr "s/.*Resource: ([[:alnum:]_]+)/\1/p" | sed '1!d')
@@ -96,18 +98,22 @@ echo  "LENDING_LIQUIDATION_TERM_RESOURCE_ADDRESS $LENDING_LIQUIDATION_TERM_RESOU
 
 
 echo "CALL_METHOD Address(\"$OWNER_ADDRESS\")\"lock_fee\" Decimal(\"5000\");" > tx.rtm
-echo "CALL_METHOD Address(\"$OWNER_ADDRESS\") \"create_proof_of_non_fungibles\" Address(\"$LENDING_MARKET_ADMIN_ADDRESS\") Array<NonFungibleLocalId>(NonFungibleLocalId(\"#1#\"));" >> tx.rtm
+echo "CALL_METHOD Address(\"$OWNER_ADDRESS\") \"create_proof_of_non_fungibles\" Address(\"$LENDING_MARKET_ADMIN_ADDRESS\") Array<NonFungibleLocalId>(NonFungibleLocalId(\"#1#\"),NonFungibleLocalId(\"#2#\"),NonFungibleLocalId(\"#3#\"),NonFungibleLocalId(\"#4#\"));" >> tx.rtm
 echo "CALL_METHOD Address(\"$LENDING_MARKET_COMPONENT_ADDRESS\") \"create_lending_pool\" Address(\"$PRICE_FEED_COMPONENT_ADDRESS\") Address(\"$XRD\") 
     Tuple(
-        Decimal(\"0.25\"),
-        Decimal(\"0.005\"),
+        Decimal(\"0.15\"),
+        Decimal(\"0.15\"),
+        Decimal(\"0.15\"),
+        Decimal(\"0.001\"),
         0u8,
         Decimal(\"0.05\"),
         Decimal(\"1\"),
         Enum<0u8>(),
         Enum<0u8>(),
         Enum<0u8>(),
-        1i64
+        5i64,
+        15i64,
+        240i64
     )
     Tuple(
         Decimal(\"0.05\"),
@@ -134,15 +140,19 @@ echo "CALL_METHOD Address(\"$LENDING_MARKET_COMPONENT_ADDRESS\") \"create_lendin
 
 echo "CALL_METHOD Address(\"$LENDING_MARKET_COMPONENT_ADDRESS\") \"create_lending_pool\" Address(\"$PRICE_FEED_COMPONENT_ADDRESS\") Address(\"$USDC_RESOURCE_ADDRESS\") 
     Tuple(
-        Decimal(\"0.25\"),
-        Decimal(\"0.005\"),
+        Decimal(\"0.15\"),
+        Decimal(\"0.15\"),
+        Decimal(\"0.15\"),
+        Decimal(\"0.001\"),
         1u8,
         Decimal(\"0.05\"),
         Decimal(\"1\"),
         Enum<0u8>(),
         Enum<0u8>(),
         Enum<0u8>(),
-        1i64
+        5i64,
+        15i64,
+        240i64
     )
     Tuple(
         Decimal(\"0.05\"),
