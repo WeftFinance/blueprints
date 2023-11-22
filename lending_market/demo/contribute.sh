@@ -8,13 +8,20 @@ LP_PROVIDER_NONFUNGIBLEGLOBALID=`resim new-simple-badge --name 'OwnerBadge' | aw
 
 resim set-default-account $LP_PROVIDER_ADDRESS  $LP_PROVIDER_PVKEY $LP_PROVIDER_NONFUNGIBLEGLOBALID
 
+out=`resim call-method $FAUCET free`
+echo $out
+out=`resim call-method $FAUCET free`
+echo $out
+out=`resim call-method $FAUCET free`
+echo $out
+
 echo "CALL_METHOD Address(\"$LP_PROVIDER_ADDRESS\") \"lock_fee\" Decimal(\"100\");" > tx.rtm 
 
 echo "CALL_METHOD
     Address(\"$LP_PROVIDER_ADDRESS\")
     \"withdraw\"
     Address(\"$XRD\")
-    Decimal(\"9500\");" >> tx.rtm 
+    Decimal(\"25000\");" >> tx.rtm 
 
 echo "TAKE_ALL_FROM_WORKTOP
     Address(\"$XRD\")

@@ -7,6 +7,8 @@ resim reset
 resim set-current-time 2023-11-22T23:01:50Z
 
 XRD=resource_sim1tknxxxxxxxxxradxrdxxxxxxxxx009923554798xxxxxxxxxakj8n3
+FAUCET=component_sim1cptxxxxxxxxxfaucetxxxxxxxxx000527798379xxxxxxxxxhkrefh
+
 
 echo "Admin account"
 out=`resim new-account | tee /dev/tty | awk '/Account component address:|Public key:|Private key:|NonFungibleGlobalId:/ {print $NF}'`
@@ -50,9 +52,9 @@ export USDC_RESOURCE_ADDRESS=$(echo "$RESULT" | sed -nr "s/.*Resource: ([[:alnum
 
 echo "CALL_METHOD Address(\"$OWNER_ADDRESS\") \"lock_fee\" Decimal(\"10\");" > tx.rtm
 echo "CALL_METHOD Address(\"$OWNER_ADDRESS\") \"create_proof_of_non_fungibles\"  Address(\"$PRICE_FEED_ADMIN_BADGE\")  Array<NonFungibleLocalId>(NonFungibleLocalId(\"#1#\"));" >> tx.rtm
-echo "CALL_METHOD Address(\"$PRICE_FEED_COMPONENT_ADDRESS\") \"admin_update_price\" Address(\"$USDC_RESOURCE_ADDRESS\") Decimal(\"1\");" >> tx.rtm
+echo "CALL_METHOD Address(\"$PRICE_FEED_COMPONENT_ADDRESS\") \"admin_update_price\" Address(\"$USDC_RESOURCE_ADDRESS\") Decimal(\"25\");" >> tx.rtm
 echo "CALL_METHOD Address(\"$OWNER_ADDRESS\") \"create_proof_of_non_fungibles\"  Address(\"$PRICE_FEED_ADMIN_BADGE\")  Array<NonFungibleLocalId>(NonFungibleLocalId(\"#1#\"));" >> tx.rtm
-echo "CALL_METHOD Address(\"$PRICE_FEED_COMPONENT_ADDRESS\") \"admin_update_price\" Address(\"$XRD\") Decimal(\"0.04\");" >> tx.rtm
+echo "CALL_METHOD Address(\"$PRICE_FEED_COMPONENT_ADDRESS\") \"admin_update_price\" Address(\"$XRD\") Decimal(\"1\");" >> tx.rtm
 echo "CALL_METHOD Address(\"$OWNER_ADDRESS\") \"deposit_batch\" Expression(\"ENTIRE_WORKTOP\");" >> tx.rtm
 
 
