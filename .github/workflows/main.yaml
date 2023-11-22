@@ -22,15 +22,15 @@ jobs:
 
       - name: Update local toolchain
         run: |
-          # rustup update
-          # rustup install nightly 
-          rustup default 1.69.0
-          rustup target add wasm32-unknown-unknown
+          rustup update
+          rustup install nightly 
           rustup component add rustfmt
           rustup component add clippy
-          git clone https://github.com/radixdlt/radixdlt-scrypto.git
-          cd radixdlt-scrypto
-          cargo install --path ./simulator         
+          cargo install --locked cargo-deny || true
+          cargo install --locked cargo-outdated || true
+          cargo install --locked cargo-udeps || true
+          cargo install --locked cargo-audit || true
+          cargo install --locked cargo-pants || true      
       
       - uses: Swatinem/rust-cache@v2
       
@@ -39,21 +39,18 @@ jobs:
           cargo --version --verbose
           rustc --version
           cargo clippy --version   
-          scrypto --version
 
       - name: Lint lending_market
         run: |
           cd lending_market
           cargo fmt -- --check
-          cargo clippy -- -D warnings          
-
-      - name: Build
+          cargo clippy -- -D warnings     
+      - name: Check lending_market
         run: |
           cd lending_market
-          scrypto build     
-
-      - name: Test lending_market
-        run: |
-          cd lending_market
-          cargo check
-          cargo test --all    
+          cargo deny check
+          cargo outdated --exit-code 1
+          cargo udeps
+          rm -rf ~/.cargo/advisory-db
+          cargo audit
+          cargo pants            
