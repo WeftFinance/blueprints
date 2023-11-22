@@ -50,8 +50,8 @@ mod lending_market {
 
     extern_blueprint!(
         // "package_tdx_2_1p4wnzxlrcv9s6hsy7fdv8td06up4wzwe5vjpmw8f8jgyj4z6vhqnl5",  // stokenet
-        // "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
-         "package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
+        "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
+        //  "package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
         SingleResourcePool {
 
             fn instantiate(
@@ -796,7 +796,7 @@ mod lending_market {
             &mut self,
             loan_amounts: IndexMap<ResourceAddress, Decimal>,
         ) -> (Vec<Bucket>, Bucket) {
-            self.check_operating_status(OperatingService::Flashloan);
+            self._check_operating_status(OperatingService::Flashloan);
 
             let mut loans: Vec<Bucket> = Vec::new();
             let mut terms: IndexMap<ResourceAddress, BatchFlashloanItem> = IndexMap::new();
@@ -907,7 +907,7 @@ mod lending_market {
         //* Lending and Borrowing methods * //
 
         pub fn contribute(&mut self, assets: Bucket) -> Bucket {
-            self.check_operating_status(OperatingService::Contribute);
+            self._check_operating_status(OperatingService::Contribute);
 
             let pool_state = self._get_pool_state(
                 &assets.resource_address(),
@@ -920,7 +920,7 @@ mod lending_market {
         }
 
         pub fn redeem(&mut self, pool_units: Bucket) -> Bucket {
-            self.check_operating_status(OperatingService::Redeem);
+            self._check_operating_status(OperatingService::Redeem);
 
             let pool_res_address = *self
                 .revers_pool_unit_refs
@@ -942,7 +942,7 @@ mod lending_market {
             cdp_proof: Proof,
             withdraw_details: Vec<(ResourceAddress, Decimal, bool)>,
         ) -> Vec<Bucket> {
-            self.check_operating_status(OperatingService::RemoveCollateral);
+            self._check_operating_status(OperatingService::RemoveCollateral);
 
             let cdp_id = self._validate_cdp_proof(cdp_proof);
 
@@ -1008,7 +1008,7 @@ mod lending_market {
             cdp_proof: Proof,
             borrows: Vec<(ResourceAddress, Decimal)>,
         ) -> Vec<Bucket> {
-            self.check_operating_status(OperatingService::Borrow);
+            self._check_operating_status(OperatingService::Borrow);
 
             let cdp_id = self._validate_cdp_proof(cdp_proof);
 
@@ -1071,7 +1071,7 @@ mod lending_market {
             delegatee_cdp_id: Option<NonFungibleLocalId>,
             payments: Vec<Bucket>,
         ) -> (Vec<Bucket>, Decimal) {
-            self.check_operating_status(OperatingService::Repay);
+            self._check_operating_status(OperatingService::Repay);
 
             // Loan of delegatee CDP can be directly repaid by the delegator CDP
             // If the delegatee CDP is provided, we check if the delegator CDP is linked to the delegatee CDP
@@ -1140,7 +1140,7 @@ mod lending_market {
             requested_collaterals: Vec<ResourceAddress>,
             total_payment_value: Option<Decimal>,
         ) -> (Vec<Bucket>, Bucket) {
-            self.check_operating_status(OperatingService::Liquidation);
+            self._check_operating_status(OperatingService::Liquidation);
 
             if let Some(total_payment_value) = total_payment_value {
                 assert!(
@@ -1236,7 +1236,7 @@ mod lending_market {
             payments: Vec<Bucket>,
             requested_collaterals: Vec<ResourceAddress>,
         ) -> (Vec<Bucket>, Decimal) {
-            self.check_operating_status(OperatingService::Liquidation);
+            self._check_operating_status(OperatingService::Liquidation);
 
             let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
 
@@ -1264,7 +1264,7 @@ mod lending_market {
         //*  PRIVATE UTILITY METHODS   *//
 
         fn _deposit_internal(&mut self, cdp_id: NonFungibleLocalId, deposits: Vec<Bucket>) {
-            self.check_operating_status(OperatingService::AddCollateral);
+            self._check_operating_status(OperatingService::AddCollateral);
 
             let (mut cdp_data, _) = self._get_cdp_data(&cdp_id, false);
 
@@ -1569,7 +1569,7 @@ mod lending_market {
             validated_cdp.as_non_fungible().non_fungible_local_id()
         }
 
-        fn check_operating_status(&self, value: OperatingService) {
+        fn _check_operating_status(&self, value: OperatingService) {
             assert!(
                 self.operating_status.check(value.clone()),
                 "{:?} is not allowed for this pool",
