@@ -29,7 +29,9 @@ jobs:
           git clone https://github.com/radixdlt/radixdlt-scrypto.git
           cd radixdlt-scrypto
           cargo install --path ./simulator         
-
+      
+      - uses: Swatinem/rust-cache@v2
+      
       - name: Toolchain info
         run: |
           cargo --version --verbose
