@@ -4,7 +4,9 @@ use scrypto_test::prelude::*;
 
 fn get_default_pool_config() -> PoolConfig {
     PoolConfig {
-        protocol_fee_rate: dec!(0.01),
+        protocol_interest_fee_rate: dec!(0.01),
+        protocol_flashloan_fee_rate: dec!(0.005),
+        protocol_liquidation_fee_rate: dec!(0.05),
         flashloan_fee_rate: dec!(0.005),
         asset_type: 1,
         liquidation_bonus_rate: dec!(0.05),
@@ -25,16 +27,50 @@ fn test_check_valid_config() {
 }
 
 #[test]
-fn test_check_invalid_lending_fee_rate() {
+fn test_check_invalid_protocol_interest_fee_rate() {
     let config = PoolConfig {
-        protocol_fee_rate: dec!(-0.01),
+        protocol_interest_fee_rate: dec!(-0.01),
         ..get_default_pool_config()
     };
 
     assert!(config.check().is_err());
 
     let config = PoolConfig {
-        protocol_fee_rate: dec!(1.01),
+        protocol_interest_fee_rate: dec!(1.01),
+        ..get_default_pool_config()
+    };
+
+    assert!(config.check().is_err());
+}
+
+#[test]
+fn test_check_invalid_protocol_flashloan_fee_rate() {
+    let config = PoolConfig {
+        protocol_flashloan_fee_rate: dec!(-0.01),
+        ..get_default_pool_config()
+    };
+
+    assert!(config.check().is_err());
+
+    let config = PoolConfig {
+        protocol_flashloan_fee_rate: dec!(1.01),
+        ..get_default_pool_config()
+    };
+
+    assert!(config.check().is_err());
+}
+
+#[test]
+fn test_check_invalid_protocol_liquidation_fee_rate() {
+    let config = PoolConfig {
+        protocol_liquidation_fee_rate: dec!(-0.01),
+        ..get_default_pool_config()
+    };
+
+    assert!(config.check().is_err());
+
+    let config = PoolConfig {
+        protocol_liquidation_fee_rate: dec!(1.01),
         ..get_default_pool_config()
     };
 

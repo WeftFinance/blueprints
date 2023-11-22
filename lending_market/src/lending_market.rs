@@ -50,8 +50,8 @@ mod lending_market {
 
     extern_blueprint!(
         // "package_tdx_2_1p4wnzxlrcv9s6hsy7fdv8td06up4wzwe5vjpmw8f8jgyj4z6vhqnl5",  // stokenet
-        "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
-        //  "package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
+        // "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
+         "package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
         SingleResourcePool {
 
             fn instantiate(
@@ -859,7 +859,7 @@ mod lending_market {
                 );
 
                 let protocol_fee_amount =
-                    loan_term.fee_amount * pool_state.pool_config.protocol_fee_rate;
+                    loan_term.fee_amount * pool_state.pool_config.protocol_flashloan_fee_rate;
 
                 let lp_fee_amount = loan_term.fee_amount - protocol_fee_amount;
 
@@ -1351,7 +1351,7 @@ mod lending_market {
 
                 let mut collaterals = pool_state.redeem_proxy(pool_unit);
                 let protocol_fee_amount =
-                    collaterals.amount() * pool_state.pool_config.protocol_fee_rate;
+                    collaterals.amount() * pool_state.pool_config.protocol_liquidation_fee_rate;
 
                 pool_state.reserve.put(collaterals.take_advanced(
                     protocol_fee_amount,

@@ -3,7 +3,10 @@ use scrypto::prelude::*;
 
 #[derive(ScryptoSbor)]
 pub enum UpdatePoolConfigInput {
-    ProtocolFeeRate(Decimal),
+    ProtocolInterestFeeRate(Decimal),
+    ProtocolFlashloanFeeRate(Decimal),
+    ProtocolLiquidationFeeRate(Decimal),
+
     FlashloanFeeRate(Decimal),
 
     DepositLimit(Option<Decimal>),
@@ -27,7 +30,10 @@ pub enum CheckPoolConfigLimitInput {
 
 #[derive(ScryptoSbor, Clone)]
 pub struct PoolConfig {
-    pub protocol_fee_rate: Decimal,
+    pub protocol_interest_fee_rate: Decimal,
+    pub protocol_flashloan_fee_rate: Decimal,
+    pub protocol_liquidation_fee_rate: Decimal,
+
     pub flashloan_fee_rate: Decimal,
 
     pub asset_type: u8,
@@ -45,8 +51,16 @@ pub struct PoolConfig {
 }
 impl PoolConfig {
     pub fn check(&self) -> Result<(), String> {
-        if !is_valid_rate(self.protocol_fee_rate) {
+        if !is_valid_rate(self.protocol_interest_fee_rate) {
             return Err("Lending fee rate must be between 0 and 1".into());
+        }
+
+        if !is_valid_rate(self.protocol_flashloan_fee_rate) {
+            return Err("Flashloan fee rate must be between 0 and 1".into());
+        }
+
+        if !is_valid_rate(self.protocol_liquidation_fee_rate) {
+            return Err("Liquidation fee rate must be between 0 and 1".into());
         }
 
         if !is_valid_rate(self.flashloan_fee_rate) {
@@ -126,12 +140,28 @@ impl PoolConfig {
                 self.flashloan_fee_rate = flashloan_fee_rate;
             }
 
-            UpdatePoolConfigInput::ProtocolFeeRate(lending_fee_rate) => {
-                if !is_valid_rate(lending_fee_rate) {
+            UpdatePoolConfigInput::ProtocolInterestFeeRate(fee_rate) => {
+                if !is_valid_rate(fee_rate) {
                     return Err("Lending fee rate must be between 0 and 1".into());
                 }
 
-                self.protocol_fee_rate = lending_fee_rate;
+                self.protocol_interest_fee_rate = fee_rate;
+            }
+
+            UpdatePoolConfigInput::ProtocolFlashloanFeeRate(fee_rate) => {
+                if !is_valid_rate(fee_rate) {
+                    return Err("Flashloan fee rate must be between 0 and 1".into());
+                }
+
+                self.protocol_flashloan_fee_rate = fee_rate;
+            }
+
+            UpdatePoolConfigInput::ProtocolLiquidationFeeRate(fee_rate) => {
+                if !is_valid_rate(fee_rate) {
+                    return Err("Liquidation fee rate must be between 0 and 1".into());
+                }
+
+                self.protocol_liquidation_fee_rate = fee_rate;
             }
 
             UpdatePoolConfigInput::LiquidationBonusRate(liquidation_bonus_rate) => {

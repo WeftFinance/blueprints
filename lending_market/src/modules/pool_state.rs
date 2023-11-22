@@ -315,7 +315,7 @@ impl LendingPoolState {
             );
 
             // Collect protocol fees on accrued interest
-            let protocol_fees = accrued_interest * self.pool_config.protocol_fee_rate;
+            let protocol_fees = accrued_interest * self.pool_config.protocol_interest_fee_rate;
 
             self.reserve.put(
                 self.pool.protected_withdraw(
