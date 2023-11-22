@@ -24,7 +24,8 @@ jobs:
         run: |
           # rustup update
           # rustup install nightly 
-          rustup default 1.69.0   
+          rustup default 1.69.0
+          rustup target add wasm32-unknown-unknown
           rustup component add clippy
           git clone https://github.com/radixdlt/radixdlt-scrypto.git
           cd radixdlt-scrypto
@@ -39,16 +40,16 @@ jobs:
           cargo clippy --version   
           scrypto --version
 
-      - name: Build
-        run: |
-          cd lending_market
-          scrypto build     
-
       - name: Lint lending_market
         run: |
           cd lending_market
           cargo fmt -- --check
           cargo clippy -- -D warnings          
+
+      - name: Build
+        run: |
+          cd lending_market
+          scrypto build     
 
       - name: Test lending_market
         run: |
