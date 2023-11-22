@@ -1,3 +1,4 @@
+use crate::lending_market::CDPUpdatedEvent;
 use scrypto::prelude::*;
 
 #[derive(ScryptoSbor, Clone, PartialEq, Debug)]
@@ -241,6 +242,10 @@ impl WrappedCDPData {
                 "updated_at",
                 Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch,
             );
+
+            Runtime::emit_event(CDPUpdatedEvent {
+                cdp_id: self.cdp_id.clone(),
+            });
         }
 
         Ok(())

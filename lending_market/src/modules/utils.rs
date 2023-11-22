@@ -27,7 +27,7 @@ pub fn get_price(
     price_feed: Global<AnyComponent>,
     res_address: ResourceAddress,
 ) -> Result<PriceInfo, String> {
-    // TODO: Handle XRD price update
+    // Bypass price feed for XRD, return 1 as XRD is the base currency
     if res_address == XRD {
         return Ok(PriceInfo {
             timestamp: Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch,
