@@ -1,17 +1,10 @@
-use crate::helpers::{
-    faucet::FaucetTestHelper, init::TestHelper, market::MarketTestHelper, methods::*,
-    price_feed::PriceFeedTestHelper,
-};
+use crate::helpers::{init::TestHelper, methods::*};
 use radix_engine_interface::{blueprints::consensus_manager::TimePrecision, prelude::*};
-use scrypto_unit::*;
-use std::path::Path;
 
 // ! ISSUE WITH TEST RUNNER: CANNOT MOVE TIME FORWARD
 #[test]
 fn test_liquidation() {
     let mut helper = TestHelper::new();
-
-    let epoch = helper.test_runner.get_current_epoch();
 
     print!(
         "Begin {:?}",
@@ -62,82 +55,58 @@ fn test_liquidation() {
     let usd = helper.faucet.usdc_resource_address;
 
     let cdp_id: u64 = 1;
-    // // Borrow 400$  Of USD
+    // Borrow 400$  Of USD
     market_borrow(
         &mut helper,
         borrower_key,
         borrower_account,
         cdp_id,
         usd,
-        dec!(400),
+        dec!(419),
     )
     .expect_commit_success();
 
-    helper.test_runner.set_current_epoch(epoch.next().unwrap());
+    // Change USD (in XRD) PRICE DROP FROM 25 to 10
+    admin_update_price(&mut helper, 1u64, usd, dec!(50)).expect_commit_success();
 
-    print!(
-        "After Borrow {:?}",
-        helper.test_runner.get_current_time(TimePrecision::Minute)
-    );
-
-    // Change XRD PRICE DROP FROM 0.04 to 0.02
-    admin_update_price(&mut helper, 1u64, XRD, dec!(0.02)).expect_commit_success();
-
-    helper.test_runner.set_current_epoch(epoch.next().unwrap());
-
-    get_price(&mut helper, XRD).expect_commit_success();
+    market_update_pool_state(&mut helper, usd).expect_commit_success();
 
     // SET UP LIQUIDATOR
     let (liquidator_user_key, _, liquidator_user_account) =
         helper.test_runner.new_allocated_account();
 
-    let mut requested_collaterals: Vec<ResourceAddress> = Vec::new();
-    requested_collaterals.push(XRD);
+    let requested_collaterals: Vec<ResourceAddress> = vec![XRD];
 
-    // // START LIQUIDATION
-    market_start_liquidation(
+    let xrd_balance = helper
+        .test_runner
+        .get_component_balance(liquidator_user_account, XRD);
+
+    // SWAP Collateral XRD TO LOAN USD
+    swap(
+        &mut helper,
+        liquidator_user_account,
+        liquidator_user_key,
+        xrd_balance,
+        XRD,
+        usd,
+    )
+    .expect_commit_success();
+
+    let usd_balance_after_swap = helper
+        .test_runner
+        .get_component_balance(liquidator_user_account, usd);
+
+    let mut payments: Vec<(ResourceAddress, Decimal)> = Vec::new();
+
+    payments.push((usd, usd_balance_after_swap));
+
+    market_fast_liquidation(
         &mut helper,
         liquidator_user_key,
         liquidator_user_account,
         cdp_id,
+        payments,
         requested_collaterals,
-        None::<Decimal>,
     )
-    .expect_commit_failure();
-
-    market_update_pool_state(&mut helper, XRD);
-
-    // let xrd_balance = helper
-    //     .test_runner
-    //     .get_component_balance(liquidator_user_account, XRD)
-    //     - Decimal::from(10_000);
-
-    // let usd_balance_before_swap = helper
-    //     .test_runner
-    //     .get_component_balance(liquidator_user_account, usd);
-
-    // // SWAP Collateral XRD TO LOAN USD
-    // swap(
-    //     &mut helper,
-    //     liquidator_user_account,
-    //     liquidator_user_key,
-    //     xrd_balance,
-    //     XRD,
-    //     usd,
-    // ).expect_commit_success();
-
-    // let usd_balance_after_swap = helper
-    //     .test_runner
-    //     .get_component_balance(liquidator_user_account, usd);
-
-    // let mut payments: Vec<(ResourceAddress, Decimal)> = Vec::new();
-
-    // payments.push((usd, usd_balance_after_swap - usd_balance_before_swap));
-
-    // market_end_liquidation(
-    //     &mut helper,
-    //     liquidator_user_key,
-    //     liquidator_user_account,
-    //     payments,
-    // ).expect_commit_success();
+    .expect_commit_success();
 }

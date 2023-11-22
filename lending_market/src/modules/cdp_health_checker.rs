@@ -400,7 +400,7 @@ impl CDPHealthChecker {
             .collateral_positions
             .contains_key(&pool_state.pool_res_address)
         {
-            pool_state.update_interest_and_price()?;
+            pool_state.update_interest_and_price(None)?;
 
             self.collateral_positions.insert(
                 pool_state.pool_res_address,
@@ -437,7 +437,7 @@ impl CDPHealthChecker {
             .loan_positions
             .contains_key(&pool_state.pool_res_address)
         {
-            pool_state.update_interest_and_price()?;
+            pool_state.update_interest_and_price(None)?;
 
             self.loan_positions.insert(
                 pool_state.pool_res_address,

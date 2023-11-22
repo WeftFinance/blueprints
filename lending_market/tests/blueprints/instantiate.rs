@@ -18,6 +18,7 @@ fn test_instantiate_faucet() {
     let (owner_public_key, _, owner_account_address) = test_runner.new_allocated_account();
     let price_feed_helper =
         PriceFeedTestHelper::new(&mut test_runner, owner_account_address, owner_public_key);
+
     let _helper = FaucetTestHelper::new(
         &mut test_runner,
         owner_account_address,
@@ -29,15 +30,19 @@ fn test_instantiate_faucet() {
 #[test]
 fn test_instantiate_market() {
     let mut test_runner = TestRunnerBuilder::new().build();
+
     let (owner_public_key, _, owner_account_address) = test_runner.new_allocated_account();
+
     let price_feed_helper =
         PriceFeedTestHelper::new(&mut test_runner, owner_account_address, owner_public_key);
+
     let faucet_helper = FaucetTestHelper::new(
         &mut test_runner,
         owner_account_address,
         owner_public_key,
         &price_feed_helper,
     );
+
     let _helper = MarketTestHelper::new(
         &mut test_runner,
         owner_account_address,

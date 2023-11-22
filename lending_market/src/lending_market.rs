@@ -49,10 +49,15 @@ pub struct LendingPoolUpdatedEvent {
 mod lending_market {
 
     extern_blueprint!(
+
+
+
         // "package_tdx_2_1p4wnzxlrcv9s6hsy7fdv8td06up4wzwe5vjpmw8f8jgyj4z6vhqnl5",  // stokenet
-        "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
-        //  "package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
+        // "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim
+         "package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
         SingleResourcePool {
+
+
 
             fn instantiate(
                 pool_res_address: ResourceAddress,
@@ -382,7 +387,7 @@ mod lending_market {
             listed_assets
                 .iter()
                 .map(|pool_res_address| {
-                    let mut pool_state = self._get_pool_state(pool_res_address, None);
+                    let mut pool_state = self._get_pool_state(pool_res_address, None, None);
 
                     let price = pool_state.last_price;
 
@@ -398,7 +403,7 @@ mod lending_market {
             pool_res_address: ResourceAddress,
             price_feed: Global<AnyComponent>,
         ) {
-            let mut pool_state = self._get_pool_state(&pool_res_address, None);
+            let mut pool_state = self._get_pool_state(&pool_res_address, None, None);
 
             get_price(price_feed, pool_res_address).expect("Price not found");
 
@@ -410,7 +415,7 @@ mod lending_market {
             pool_res_address: ResourceAddress,
             value: UpdateLiquidationThresholdInput,
         ) {
-            let mut pool_state = self._get_pool_state(&pool_res_address, None);
+            let mut pool_state = self._get_pool_state(&pool_res_address, None, None);
 
             pool_state
                 .update_liquidation_threshold(value)
@@ -423,7 +428,7 @@ mod lending_market {
             initial_rate: Decimal,
             interest_options_break_points: Vec<ISInputBreakPoint>,
         ) {
-            let mut pool_state = self._get_pool_state(&pool_res_address, None);
+            let mut pool_state = self._get_pool_state(&pool_res_address, None, None);
 
             pool_state
                 .set_interest_strategy(initial_rate, interest_options_break_points)
@@ -441,15 +446,24 @@ mod lending_market {
             pool_res_address: ResourceAddress,
             value: UpdatePoolConfigInput,
         ) {
-            let mut pool_state = self._get_pool_state(&pool_res_address, None);
+            let mut pool_state = self._get_pool_state(&pool_res_address, None, None);
 
             pool_state
                 .update_config(value)
                 .expect("Invalid pool config");
         }
 
-        pub fn update_pool_state(&mut self, pool_res_address: ResourceAddress) {
-            self._get_pool_state(&pool_res_address, None);
+        pub fn update_pool_state(
+            &mut self,
+            pool_res_address: ResourceAddress,
+            bypass_price_debounce: bool,
+            bypass_interest_debounce: bool,
+        ) {
+            self._get_pool_state(
+                &pool_res_address,
+                None,
+                Some((bypass_price_debounce, bypass_interest_debounce)),
+            );
         }
 
         ///
@@ -462,7 +476,7 @@ mod lending_market {
         ) -> Result<(), String> {
             match pool_res_address {
                 Some(pool_res_address) => {
-                    let mut pool_state = self._get_pool_state(&pool_res_address, None);
+                    let mut pool_state = self._get_pool_state(&pool_res_address, None, None);
 
                     pool_state
                         .operating_status
@@ -912,6 +926,7 @@ mod lending_market {
             let pool_state = self._get_pool_state(
                 &assets.resource_address(),
                 Some(OperatingService::Contribute),
+                None,
             );
 
             pool_state
@@ -927,7 +942,7 @@ mod lending_market {
                 .get(&pool_units.resource_address())
                 .expect("Pool unit not found");
 
-            self._get_pool_state(&pool_res_address, Some(OperatingService::Redeem))
+            self._get_pool_state(&pool_res_address, Some(OperatingService::Redeem), None)
                 .redeem_proxy(pool_units)
         }
 
@@ -954,6 +969,7 @@ mod lending_market {
                     let mut pool_state = self._get_pool_state(
                         &pool_res_address,
                         Some(OperatingService::RemoveCollateral),
+                        None,
                     );
 
                     let current_deposit_units = cdp_data.get_collateral_units(pool_res_address);
@@ -1018,8 +1034,11 @@ mod lending_market {
                 borrows
                     .into_iter()
                     .fold(Vec::new(), |mut loans, (pool_res_address, amount)| {
-                        let mut pool_state =
-                            self._get_pool_state(&pool_res_address, Some(OperatingService::Borrow));
+                        let mut pool_state = self._get_pool_state(
+                            &pool_res_address,
+                            Some(OperatingService::Borrow),
+                            None,
+                        );
 
                         let (borrowed_assets, delta_loan_units) = pool_state
                             .withdraw_for_borrow(amount)
@@ -1289,8 +1308,11 @@ mod lending_market {
                     )
                 };
 
-                let mut pool_state =
-                    self._get_pool_state(&pool_res_address, Some(OperatingService::AddCollateral));
+                let mut pool_state = self._get_pool_state(
+                    &pool_res_address,
+                    Some(OperatingService::AddCollateral),
+                    None,
+                );
 
                 let deposit_units = if res_address == pool_unit_res_address {
                     assets
@@ -1333,8 +1355,11 @@ mod lending_market {
                     break;
                 }
 
-                let mut pool_state =
-                    self._get_pool_state(&pool_res_address, Some(OperatingService::Liquidation));
+                let mut pool_state = self._get_pool_state(
+                    &pool_res_address,
+                    Some(OperatingService::Liquidation),
+                    None,
+                );
 
                 let bonus_rate = dec!(1) + pool_state.pool_config.liquidation_bonus_rate;
 
@@ -1411,7 +1436,7 @@ mod lending_market {
                 |(mut remainders, mut total_payment_value), mut payment| {
                     let pool_res_address = payment.resource_address();
 
-                    let mut pool_state = self._get_pool_state(&pool_res_address, None);
+                    let mut pool_state = self._get_pool_state(&pool_res_address, None, None);
 
                     // ! Liquidation
                     if for_liquidation {
@@ -1522,6 +1547,7 @@ mod lending_market {
             &mut self,
             pool_res_address: &ResourceAddress,
             operating_status: Option<OperatingService>,
+            bypass_debounce: Option<(bool, bool)>,
         ) -> KeyValueEntryRefMut<'_, LendingPoolState> {
             let mut pool_state = self.pool_states.get_mut(pool_res_address).unwrap();
 
@@ -1532,7 +1558,7 @@ mod lending_market {
             }
 
             pool_state
-                .update_interest_and_price()
+                .update_interest_and_price(bypass_debounce)
                 .expect("Error updating pool state");
 
             pool_state
