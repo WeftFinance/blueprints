@@ -38,9 +38,9 @@ jobs:
           cargo fmt -- --check
           cargo clippy -- -D warnings  
         
-      - name: Lint single_asset_pool
+      - name: Lint single_resource_pool
         run: |
-          cd single_asset_pool
+          cd single_resource_pool
           cargo fmt -- --check
           cargo clippy -- -D warnings  
         
