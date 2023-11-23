@@ -330,7 +330,7 @@ impl CDPHealthChecker {
     pub fn check_cdp(&mut self) -> Result<(), String> {
         self._update_health_check_data()?;
 
-        if self.total_loan_to_value_ratio >= Decimal::ONE {
+        if self.total_loan_to_value_ratio > Decimal::ONE {
             return Err("LTV need to be lower 1".to_string());
         }
 
@@ -352,7 +352,7 @@ impl CDPHealthChecker {
             };
 
             if !loan_value_ratio_check {
-                return Err("Loan value ratio need to be lower than set limit".into());
+                return Err("Loan value ratio need to be lower than defined limit".into());
             }
         };
 

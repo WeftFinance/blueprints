@@ -7,7 +7,7 @@ echo "CALL_METHOD
     \"lock_fee\"
     Decimal(\"100\");" > tx.rtm
 echo "CALL_METHOD Address(\"$OWNER_ADDRESS\") \"create_proof_of_non_fungibles\"  Address(\"$PRICE_FEED_ADMIN_BADGE\")  Array<NonFungibleLocalId>(NonFungibleLocalId(\"#1#\"));" >> tx.rtm
-echo "CALL_METHOD Address(\"$PRICE_FEED_COMPONENT_ADDRESS\") \"admin_update_price\" Address(\"$USDC_RESOURCE_ADDRESS\") Decimal(\"50000000\");" >> tx.rtm
+echo "CALL_METHOD Address(\"$PRICE_FEED_COMPONENT_ADDRESS\") \"admin_update_price\" Address(\"$USDC_RESOURCE_ADDRESS\") Decimal(\"26\");" >> tx.rtm
 echo "CALL_METHOD Address(\"$OWNER_ADDRESS\") \"deposit_batch\" Expression(\"ENTIRE_WORKTOP\");" >> tx.rtm
 resim run tx.rtm
 
@@ -23,7 +23,7 @@ LIQUIDATOR_NONFUNGIBLEGLOBALID=`resim new-simple-badge --name 'OwnerBadge' | awk
 
 resim set-default-account $LIQUIDATOR_ADDRESS  $LIQUIDATOR_PVKEY $LIQUIDATOR_NONFUNGIBLEGLOBALID
 
-resim set-current-time 2023-11-23T01:10:50Z
+resim set-current-time 2023-11-22T23:50:50Z
 
 echo "CALL_METHOD
     Address(\"$LIQUIDATOR_ADDRESS\")
@@ -50,14 +50,18 @@ echo "CALL_METHOD
     Bucket(\"xrd_bucket\"); " >> tx.rtm 
 
 echo "TAKE_ALL_FROM_WORKTOP
+    Address(\"$USDC_RESOURCE_ADDRESS\")
+    Bucket(\"udsc_bucket\");" >> tx.rtm 
+
+echo "TAKE_ALL_FROM_WORKTOP
     Address(\"$LENDING_LIQUIDATION_TERM_RESOURCE_ADDRESS\")
     Bucket(\"liquidation_term_bucket\");" >> tx.rtm 
 
 echo "CALL_METHOD
     Address(\"$LENDING_MARKET_COMPONENT_ADDRESS\")
     \"end_liquidation\"
-    Array<Address>(
-        Address(\"$USDC_RESOURCE_ADDRESS\")
+    Array<Bucket>(
+        Bucket(\"udsc_bucket\")
     )
     Bucket(\"liquidation_term_bucket\");" >> tx.rtm
 

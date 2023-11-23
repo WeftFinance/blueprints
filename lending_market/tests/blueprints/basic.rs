@@ -1,15 +1,10 @@
-
-use std::path::Path;
-use lending_market::{modules::cdp_data::*, lending_market::lending_market::LendingMarket};
-use transaction::builder::ManifestBuilder;
 use crate::helpers::{
     faucet::FaucetTestHelper, init::TestHelper, market::MarketTestHelper, methods::*,
     price_feed::PriceFeedTestHelper,
 };
-use radix_engine_interface::{prelude::*, blueprints::consensus_manager::TimePrecision};
+use radix_engine_interface::{blueprints::consensus_manager::TimePrecision, prelude::*};
 use scrypto_unit::*;
-use radix_engine_interface::prelude::*;
-
+use std::path::Path;
 
 #[test]
 fn test_deposit_withdraw_borrow_repay() {
@@ -175,7 +170,6 @@ fn test_deposit_withdraw_borrow_repay() {
     .expect_commit_success();
 }
 
-
 #[test]
 fn test_instanciate_price_feed() {
     let mut test_runner = TestRunnerBuilder::new().build();
@@ -230,14 +224,14 @@ fn test_instanciate_market() {
 #[test]
 fn test_liquidation() {
     let mut helper = TestHelper::new();
-    
 
-    let epoch = helper
-        .test_runner
-        .get_current_epoch();
+    let epoch = helper.test_runner.get_current_epoch();
 
-    print!("Begin {:?}", helper.test_runner.get_current_time(TimePrecision::Minute)); 
-        
+    print!(
+        "Begin {:?}",
+        helper.test_runner.get_current_time(TimePrecision::Minute)
+    );
+
     // SET UP A LP PROVIDER
     let (lp_user_key, _, lp_user_account) = helper.test_runner.new_allocated_account();
     helper.test_runner.load_account_from_faucet(lp_user_account);
@@ -281,7 +275,7 @@ fn test_liquidation() {
 
     let usd = helper.faucet.usdc_resource_address;
 
-    let cdp_id : u64 = 1; 
+    let cdp_id: u64 = 1;
     // // Borrow 400$  Of USD
     market_borrow(
         &mut helper,
@@ -293,27 +287,19 @@ fn test_liquidation() {
     )
     .expect_commit_success();
 
-      
-    helper
-        .test_runner
-        .set_current_epoch(epoch.next().unwrap()); 
+    helper.test_runner.set_current_epoch(epoch.next().unwrap());
 
-        print!("After Borrow {:?}", helper.test_runner.get_current_time(TimePrecision::Minute)); 
+    print!(
+        "After Borrow {:?}",
+        helper.test_runner.get_current_time(TimePrecision::Minute)
+    );
 
     // Change XRD PRICE DROP FROM 0.04 to 0.02
-    admin_update_price(
-            &mut helper,
-            1u64,
-            XRD,
-            dec!(0.02),
-        )
-        .expect_commit_success();
-    
-        helper
-        .test_runner
-        .set_current_epoch(epoch.next().unwrap()); 
-    
-        get_price( &mut helper,XRD).expect_commit_success();
+    admin_update_price(&mut helper, 1u64, XRD, dec!(0.02)).expect_commit_success();
+
+    helper.test_runner.set_current_epoch(epoch.next().unwrap());
+
+    get_price(&mut helper, XRD).expect_commit_success();
 
     // SET UP LIQUIDATOR
     let (liquidator_user_key, _, liquidator_user_account) =
@@ -333,7 +319,7 @@ fn test_liquidation() {
     )
     .expect_commit_failure();
 
-    market_update_pool_state(&mut helper,XRD);
+    market_update_pool_state(&mut helper, XRD);
 
     // let xrd_balance = helper
     //     .test_runner
@@ -368,8 +354,4 @@ fn test_liquidation() {
     //     liquidator_user_account,
     //     payments,
     // ).expect_commit_success();
-
-
 }
-
-

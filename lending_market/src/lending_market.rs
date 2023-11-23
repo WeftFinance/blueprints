@@ -1384,8 +1384,6 @@ mod lending_market {
                     .checked_truncate(RoundingMode::ToNearestMidpointToEven)
                     .unwrap();
 
-                // info!("{},{}", temp_total_payment_value, total_payement_value);
-
                 cdp_data
                     .update_collateral(pool_res_address, -collateral_units)
                     .expect("Error updating collateral for CDP");
@@ -1395,8 +1393,9 @@ mod lending_market {
                     .expect("Error redeeming pool units from collateral");
 
                 let mut collaterals = pool_state.redeem_proxy(pool_unit);
-                let protocol_fee_amount =
-                    collaterals.amount() * pool_state.pool_config.protocol_liquidation_fee_rate;
+                let protocol_fee_amount = collaterals.amount()
+                    * pool_state.pool_config.protocol_liquidation_fee_rate
+                    * pool_state.pool_config.liquidation_bonus_rate;
 
                 pool_state.reserve.put(collaterals.take_advanced(
                     protocol_fee_amount,
@@ -1508,13 +1507,6 @@ mod lending_market {
                     remainders.push(payment);
 
                     total_payment_value += max_loan_value;
-
-                    info!(
-                        "total_payment_value: {}, expected_payment_value: {}",
-                        total_payment_value,
-                        expected_payment_value // delta_loan_unit,
-                                               // cdp_data.get_loan_unit(pool_res_address)
-                    );
 
                     (remainders, total_payment_value)
                 },
