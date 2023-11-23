@@ -174,7 +174,7 @@ fn test_deposit_withdraw_borrow_repay() {
 fn test_instanciate_price_feed() {
     let mut test_runner = TestRunnerBuilder::new().build();
     let (owner_public_key, _, owner_account_address) = test_runner.new_allocated_account();
-    let mut helper =
+    let _helper =
         PriceFeedTestHelper::new(&mut test_runner, owner_account_address, owner_public_key);
 }
 
@@ -184,7 +184,7 @@ fn test_instanciate_faucet() {
     let (owner_public_key, _, owner_account_address) = test_runner.new_allocated_account();
     let price_feed_helper =
         PriceFeedTestHelper::new(&mut test_runner, owner_account_address, owner_public_key);
-    let helper = FaucetTestHelper::new(
+    let _helper = FaucetTestHelper::new(
         &mut test_runner,
         owner_account_address,
         owner_public_key,
@@ -212,7 +212,7 @@ fn test_instanciate_market() {
         owner_public_key,
         &price_feed_helper,
     );
-    let helper = MarketTestHelper::new(
+    let _helper = MarketTestHelper::new(
         &mut test_runner,
         owner_account_address,
         owner_public_key,

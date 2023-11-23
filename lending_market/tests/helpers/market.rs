@@ -152,7 +152,7 @@ impl MarketTestHelper {
 
         // Initialize USD lending pool
 
-        let manifest_builder  = ManifestBuilder::new()
+        let manifest_builder = ManifestBuilder::new()
             .lock_fee_from_faucet()
             .create_proof_from_account_of_non_fungibles(
                 owner_account_address,
@@ -198,14 +198,13 @@ impl MarketTestHelper {
                     )
                 ),
             )
-            .deposit_batch(owner_account_address)
-            ;
+            .deposit_batch(owner_account_address);
 
         let receipt3 = test_runner.execute_manifest(
             build_and_dumb_to_fs(manifest_builder, "create_lending_pools".into()),
             vec![NonFungibleGlobalId::from_public_key(&owner_public_key)],
         );
-        
+
         println!("{:?}\n", receipt3);
         let _result3 = receipt3.expect_commit(true);
 
