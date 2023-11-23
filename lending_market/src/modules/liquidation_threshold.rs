@@ -84,43 +84,27 @@ impl LiquidationThreshold {
     ) -> Result<(), String> {
         match value {
             UpdateLiquidationThresholdInput::DefaultValue(value) => {
-                if !is_valid_rate(value) {
-                    return Err("Invalid liquidation threshold default value".into());
-                }
                 self.default_value = value;
             }
 
             UpdateLiquidationThresholdInput::IdenticalResource(value) => {
-                if value.is_some() && !is_valid_rate(value.unwrap()) {
-                    return Err("Invalid liquidation threshold identical resource".into());
-                }
                 self.identical_resource = value;
             }
 
             UpdateLiquidationThresholdInput::IdenticalAssetType(value) => {
-                if value.is_some() && !is_valid_rate(value.unwrap()) {
-                    return Err("Invalid liquidation threshold identical asset type".into());
-                }
-
                 self.identical_asset_type = value;
             }
 
             UpdateLiquidationThresholdInput::AssetTypeEntry(asset_type, value) => {
-                if !is_valid_rate(value.unwrap()) {
-                    return Err("Invalid liquidation threshold asset type entry".into());
-                }
-
                 self.set_asset_type_entry(asset_type, value);
             }
 
             UpdateLiquidationThresholdInput::ResourceEntry(res_address, value) => {
-                if !is_valid_rate(value.unwrap()) {
-                    return Err("Invalid liquidation threshold resource entry".into());
-                }
-
                 self.set_resource_entry(res_address, value);
             }
         }
+
+        self.check()?;
 
         Ok(())
     }

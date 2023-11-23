@@ -67,7 +67,7 @@ fn test_liquidation() {
     .expect_commit_success();
 
     // Change USD (in XRD) PRICE DROP FROM 25 to 10
-    admin_update_price(&mut helper, 1u64, usd, dec!(50)).expect_commit_success();
+    admin_update_price(&mut helper, 1u64, usd, dec!(27)).expect_commit_success();
 
     market_update_pool_state(&mut helper, usd).expect_commit_success();
 
@@ -100,13 +100,16 @@ fn test_liquidation() {
 
     payments.push((usd, usd_balance_after_swap));
 
-    market_fast_liquidation(
+    let receipt = market_fast_liquidation(
         &mut helper,
         liquidator_user_key,
         liquidator_user_account,
         cdp_id,
         payments,
         requested_collaterals,
-    )
-    .expect_commit_success();
+    );
+
+    println!("{:?}", receipt);
+
+    receipt.expect_commit_success();
 }

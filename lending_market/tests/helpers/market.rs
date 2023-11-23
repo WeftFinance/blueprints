@@ -78,7 +78,7 @@ impl MarketTestHelper {
         let market_reserve_collector_badge = resource_addresses_created[1];
         let cdp_resource_address = resource_addresses_created[2];
         let batch_flashloan_resource_address = resource_addresses_created[3];
-        let liquidation_term_resource_address = resource_addresses_created[4];
+        let liquidation_term_resource_address = resource_addresses_created[3];
 
         // // Pools
 

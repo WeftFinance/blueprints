@@ -50,14 +50,10 @@ mod lending_market {
 
     extern_blueprint!(
 
-
-
         // "package_tdx_2_1p4wnzxlrcv9s6hsy7fdv8td06up4wzwe5vjpmw8f8jgyj4z6vhqnl5",  // stokenet
         "package_sim1ph6xspj0xlmspjju2asxg7xnucy7tk387fufs4jrfwsvt85wvqf70a",// resim
-        //"package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
+        // "package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
         SingleResourcePool {
-
-
 
             fn instantiate(
                 pool_res_address: ResourceAddress,
@@ -102,12 +98,11 @@ mod lending_market {
 
             create_lending_pool => restrict_to: [admin];
 
-            set_price_feed => restrict_to: [admin];
-
+            update_price_feed => restrict_to: [admin];
             update_market_config => restrict_to: [admin];
             update_pool_config => restrict_to: [admin];
             update_liquidation_threshold => restrict_to: [admin];
-            set_interest_strategy => restrict_to: [admin];
+            update_interest_strategy => restrict_to: [admin];
 
             admin_update_operating_status => restrict_to: [admin];
 
@@ -162,9 +157,6 @@ mod lending_market {
         admin_rule: AccessRule,
 
         ///
-        fee_subsid_reserve: Vault,
-
-        ///
         cdp_res_manager: ResourceManager,
 
         ///
@@ -177,7 +169,7 @@ mod lending_market {
         pool_unit_refs: IndexMap<ResourceAddress, ResourceAddress>,
 
         ///
-        revers_pool_unit_refs: IndexMap<ResourceAddress, ResourceAddress>,
+        reverse_pool_unit_refs: IndexMap<ResourceAddress, ResourceAddress>,
 
         ///
         listed_assets: IndexSet<ResourceAddress>,
@@ -186,10 +178,7 @@ mod lending_market {
         pool_states: KeyValueStore<ResourceAddress, LendingPoolState>,
 
         ///
-        batch_flashloan_term_res_manager: ResourceManager,
-
-        ///
-        liquidation_term_res_manager: ResourceManager,
+        transient_res_manager: ResourceManager,
 
         ///
         operating_status: OperatingStatus,
@@ -235,13 +224,9 @@ mod lending_market {
             let cdp_res_manager =
                 create_cdp_res_manager(admin_rule.clone(), component_rule.clone());
 
-            // * Create batch flashloan term resource manager * //
-            let batch_flashloan_term_res_manager =
-                create_batch_flashloan_term_res_manager(admin_rule.clone(), component_rule.clone());
-
-            // * Create liquidation term resource manager * //
-            let liquidation_term_res_manager =
-                create_liquidation_term_res_manager(admin_rule.clone(), component_rule);
+            // * Create transient resource manager * //
+            let transient_res_manager =
+                create_transient_res_manager(admin_rule.clone(), component_rule);
 
             // *  Instantiate our component with the previously created resources and addresses * //
             Self {
@@ -249,11 +234,9 @@ mod lending_market {
                 cdp_res_manager,
                 admin_rule: admin_rule.clone(),
                 cdp_counter: 0,
-                fee_subsid_reserve: Vault::new(XRD),
-                batch_flashloan_term_res_manager,
-                liquidation_term_res_manager,
+                transient_res_manager,
                 pool_unit_refs: IndexMap::new(),
-                revers_pool_unit_refs: IndexMap::new(),
+                reverse_pool_unit_refs: IndexMap::new(),
                 pool_states: KeyValueStore::new(),
                 listed_assets: IndexSet::new(),
                 operating_status: OperatingStatus::new(),
@@ -349,7 +332,7 @@ mod lending_market {
                 reserve: Vault::new(pool_res_address),
                 pool_res_address,
 
-                last_price: last_price_info.price,
+                price: last_price_info.price,
 
                 price_updated_at: Clock::current_time(TimePrecision::Minute)
                     .seconds_since_unix_epoch,
@@ -371,7 +354,7 @@ mod lending_market {
             self.pool_states.insert(pool_res_address, pool_state);
 
             //
-            self.revers_pool_unit_refs
+            self.reverse_pool_unit_refs
                 .insert(pool_unit_res_address, pool_res_address);
 
             self.pool_unit_refs
@@ -389,7 +372,7 @@ mod lending_market {
                 .map(|pool_res_address| {
                     let mut pool_state = self._get_pool_state(pool_res_address, None, None);
 
-                    let price = pool_state.last_price;
+                    let price = pool_state.price;
 
                     let fee = pool_state.reserve.take_all();
 
@@ -398,7 +381,7 @@ mod lending_market {
                 .collect()
         }
 
-        pub fn set_price_feed(
+        pub fn update_price_feed(
             &mut self,
             pool_res_address: ResourceAddress,
             price_feed: Global<AnyComponent>,
@@ -407,7 +390,7 @@ mod lending_market {
 
             get_price(price_feed, pool_res_address).expect("Price not found");
 
-            pool_state.set_price_feed(price_feed);
+            pool_state.price_feed_comp = price_feed;
         }
 
         pub fn update_liquidation_threshold(
@@ -418,11 +401,12 @@ mod lending_market {
             let mut pool_state = self._get_pool_state(&pool_res_address, None, None);
 
             pool_state
+                .liquidation_threshold
                 .update_liquidation_threshold(value)
                 .expect("Invalid liquidation threshold");
         }
 
-        pub fn set_interest_strategy(
+        pub fn update_interest_strategy(
             &mut self,
             pool_res_address: ResourceAddress,
             initial_rate: Decimal,
@@ -431,7 +415,8 @@ mod lending_market {
             let mut pool_state = self._get_pool_state(&pool_res_address, None, None);
 
             pool_state
-                .set_interest_strategy(initial_rate, interest_options_break_points)
+                .interest_strategy
+                .set_breakpoints(initial_rate, interest_options_break_points)
                 .expect("Invalid interest strategy breakpoints");
         }
 
@@ -449,7 +434,8 @@ mod lending_market {
             let mut pool_state = self._get_pool_state(&pool_res_address, None, None);
 
             pool_state
-                .update_config(value)
+                .pool_config
+                .update(value)
                 .expect("Invalid pool config");
         }
 
@@ -849,8 +835,10 @@ mod lending_market {
 
             (
                 loans,
-                self.batch_flashloan_term_res_manager
-                    .mint_ruid_non_fungible(BatchFlashloanTerm { terms }),
+                self.transient_res_manager
+                    .mint_ruid_non_fungible(TransientResData {
+                        data: TransientResDataType::BatchFlashloanItem(terms),
+                    }),
             )
         }
 
@@ -861,14 +849,20 @@ mod lending_market {
         ) -> Vec<Bucket> {
             let mut remainders: Vec<Bucket> = Vec::new();
 
-            let batch_loan_term_data: BatchFlashloanTerm =
+            let transient_res_data: TransientResData =
                 batch_loan_term.as_non_fungible().non_fungible().data();
+
+            let batch_loan_term_data = match transient_res_data.data {
+                TransientResDataType::BatchFlashloanItem(batch_loan_term_data) => {
+                    batch_loan_term_data
+                }
+                _ => panic!("Invalid transient resource data"),
+            };
 
             for mut payment in payments {
                 let pool_res_address = payment.resource_address();
 
                 let loan_term = batch_loan_term_data
-                    .terms
                     .get(&pool_res_address)
                     .expect("flash loan term not found for provided resource");
 
@@ -913,7 +907,7 @@ mod lending_market {
                 remainders.push(payment);
             }
 
-            self.batch_flashloan_term_res_manager.burn(batch_loan_term);
+            self.transient_res_manager.burn(batch_loan_term);
 
             remainders
         }
@@ -938,7 +932,7 @@ mod lending_market {
             self._check_operating_status(OperatingService::Redeem);
 
             let pool_res_address = *self
-                .revers_pool_unit_refs
+                .reverse_pool_unit_refs
                 .get(&pool_units.resource_address())
                 .expect("Pool unit not found");
 
@@ -1192,10 +1186,12 @@ mod lending_market {
             );
 
             let liquidation_term =
-                self.liquidation_term_res_manager
-                    .mint_ruid_non_fungible(LiquidationTerm {
-                        cdp_id,
-                        payement_value: total_payement_value,
+                self.transient_res_manager
+                    .mint_ruid_non_fungible(TransientResData {
+                        data: TransientResDataType::LiquidationTerm(LiquidationTerm {
+                            cdp_id,
+                            payement_value: total_payement_value,
+                        }),
                     });
 
             (returned_collaterals, liquidation_term)
@@ -1206,8 +1202,15 @@ mod lending_market {
             payments: Vec<Bucket>,
             liquidation_term: Bucket,
         ) -> (Vec<Bucket>, Decimal) {
-            let liquidation_term_data: LiquidationTerm =
+            let transient_data: TransientResData =
                 liquidation_term.as_non_fungible().non_fungible().data();
+
+            let liquidation_term_data = match transient_data.data {
+                TransientResDataType::LiquidationTerm(liquidation_term_data) => {
+                    liquidation_term_data
+                }
+                _ => panic!("Invalid transient resource data"),
+            };
 
             let cdp_id = liquidation_term_data.cdp_id;
 
@@ -1226,25 +1229,14 @@ mod lending_market {
                 "Total payment value does not match with the liquidation term"
             );
 
-            if total_payment_value == liquidation_term_data.payement_value {
-                self.liquidation_term_res_manager.burn(liquidation_term);
+            self.transient_res_manager.burn(liquidation_term);
 
-                Runtime::emit_event(CDPLiquidatedEvent {
-                    cdp_id,
-                    delegator_cdp_id: delegator_cdp_data
-                        .as_ref()
-                        .map(|delegator_cdp_data| delegator_cdp_data.clone().cdp_id),
-                });
-            } else {
-                self.liquidation_term_res_manager.update_non_fungible_data(
-                    &liquidation_term.as_non_fungible().non_fungible_local_id(),
-                    "payement_value",
-                    LiquidationTerm {
-                        cdp_id,
-                        payement_value: liquidation_term_data.payement_value - total_payment_value,
-                    },
-                );
-            }
+            Runtime::emit_event(CDPLiquidatedEvent {
+                cdp_id,
+                delegator_cdp_id: delegator_cdp_data
+                    .as_ref()
+                    .map(|delegator_cdp_data| delegator_cdp_data.clone().cdp_id),
+            });
 
             (remainders, total_payment_value)
         }
@@ -1254,7 +1246,7 @@ mod lending_market {
             cdp_id: NonFungibleLocalId,
             payments: Vec<Bucket>,
             requested_collaterals: Vec<ResourceAddress>,
-        ) -> (Vec<Bucket>, Decimal) {
+        ) -> (Vec<Bucket>, Vec<Bucket>, Decimal) {
             self._check_operating_status(OperatingService::Liquidation);
 
             let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
@@ -1270,14 +1262,16 @@ mod lending_market {
             let (remainders, total_payment_value) =
                 self._repay_internal(&mut cdp_data, &mut delegator_cdp_data, payments, None, true);
 
-            let (_returned_collaterals, _total_payement_value) = self._remove_collateral(
+            let (returned_collaterals, _total_payement_value) = self._remove_collateral(
                 delegator_cdp_data.as_mut().unwrap_or(&mut cdp_data),
                 requested_collaterals,
                 total_payment_value,
                 true,
             );
 
-            (remainders, total_payment_value)
+            info!("total_payment_value: {}", total_payment_value);
+
+            (remainders, returned_collaterals, total_payment_value)
         }
 
         //*  PRIVATE UTILITY METHODS   *//
@@ -1303,7 +1297,7 @@ mod lending_market {
                     (res_address, *value)
                 } else {
                     (
-                        *self.revers_pool_unit_refs.get(&res_address).unwrap(),
+                        *self.reverse_pool_unit_refs.get(&res_address).unwrap(),
                         res_address,
                     )
                 };
@@ -1351,7 +1345,7 @@ mod lending_market {
             for pool_res_address in requested_collaterals {
                 // Make sure that that each requested collateral will have a bucket in the worktop
                 if temp_requested_value == dec!(0) {
-                    returned_collaterals.push(Bucket::new(pool_res_address));
+                    // returned_collaterals.push(Bucket::new(pool_res_address));
                     break;
                 }
 
@@ -1371,7 +1365,7 @@ mod lending_market {
                     .checked_truncate(RoundingMode::ToNearestMidpointToEven)
                     .unwrap();
 
-                let mut max_collateral_value = max_collateral_amount * pool_state.last_price;
+                let mut max_collateral_value = max_collateral_amount * pool_state.price;
 
                 max_collateral_value = max_collateral_value.min(bonus_rate * temp_requested_value);
 
@@ -1379,8 +1373,7 @@ mod lending_market {
 
                 returned_collaterals_value += max_collateral_value / bonus_rate;
 
-                let collateral_units = ((max_collateral_value / pool_state.last_price)
-                    * unit_ratio)
+                let collateral_units = ((max_collateral_value / pool_state.price) * unit_ratio)
                     .checked_truncate(RoundingMode::ToNearestMidpointToEven)
                     .unwrap();
 
@@ -1469,8 +1462,8 @@ mod lending_market {
 
                     max_loan_amount = max_loan_amount.min(payment.amount());
 
-                    let mut max_loan_value = (max_loan_amount * pool_state.last_price)
-                        .min(pool_borrowed_amount * pool_state.last_price);
+                    let mut max_loan_value = (max_loan_amount * pool_state.price)
+                        .min(pool_borrowed_amount * pool_state.price);
 
                     // ! Liquidation
                     if payment_value.is_some() {
@@ -1483,7 +1476,7 @@ mod lending_market {
                         );
                     };
 
-                    max_loan_amount = max_loan_value / pool_state.last_price;
+                    max_loan_amount = max_loan_value / pool_state.price;
 
                     let delta_loan_unit = pool_state
                         .deposit_for_repay(payment.take_advanced(
@@ -1538,12 +1531,12 @@ mod lending_market {
         fn _get_pool_state(
             &mut self,
             pool_res_address: &ResourceAddress,
-            operating_status: Option<OperatingService>,
+            operating_service: Option<OperatingService>,
             bypass_debounce: Option<(bool, bool)>,
         ) -> KeyValueEntryRefMut<'_, LendingPoolState> {
             let mut pool_state = self.pool_states.get_mut(pool_res_address).unwrap();
 
-            if let Some(operating_status) = operating_status {
+            if let Some(operating_status) = operating_service {
                 pool_state
                     .check_operating_status(operating_status)
                     .expect("Invalid operating status");

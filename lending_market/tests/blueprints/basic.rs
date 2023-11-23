@@ -171,7 +171,7 @@ fn test_deposit_withdraw_borrow_repay() {
 }
 
 #[test]
-fn test_instanciate_price_feed() {
+fn test_instantiate_price_feed() {
     let mut test_runner = TestRunnerBuilder::new().build();
     let (owner_public_key, _, owner_account_address) = test_runner.new_allocated_account();
     let _helper =
@@ -179,7 +179,7 @@ fn test_instanciate_price_feed() {
 }
 
 #[test]
-fn test_instanciate_faucet() {
+fn test_instantiate_faucet() {
     let mut test_runner = TestRunnerBuilder::new().build();
     let (owner_public_key, _, owner_account_address) = test_runner.new_allocated_account();
     let price_feed_helper =
@@ -201,7 +201,7 @@ fn test_create_pool_package_address() {
 }
 
 #[test]
-fn test_instanciate_market() {
+fn test_instantiate_market() {
     let mut test_runner = TestRunnerBuilder::new().build();
     let (owner_public_key, _, owner_account_address) = test_runner.new_allocated_account();
     let price_feed_helper =

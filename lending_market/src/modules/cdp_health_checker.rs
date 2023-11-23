@@ -216,7 +216,7 @@ impl CDPHealthChecker {
         let mut load_data = |pool_res_address: &ResourceAddress,
                              units: Decimal,
 
-                             load_collateral: LoadPositionType| {
+                             position_type: LoadPositionType| {
             let wrapped_pool_state = pool_states.get_mut(pool_res_address);
             if wrapped_pool_state.is_none() {
                 return Err("Pool state not found".to_string());
@@ -224,7 +224,7 @@ impl CDPHealthChecker {
 
             let mut pool_state = wrapped_pool_state.unwrap();
 
-            match load_collateral {
+            match position_type {
                 LoadPositionType::Collateral => {
                     let collateral_position =
                         extended_cdp.get_collateral_position(&mut pool_state)?;
@@ -362,7 +362,7 @@ impl CDPHealthChecker {
     pub fn can_liquidate(&mut self) -> Result<(), String> {
         self._update_health_check_data()?;
 
-        if self.total_loan_to_value_ratio < Decimal::ONE {
+        if self.total_loan_to_value_ratio <= Decimal::ONE {
             return Err("This CDP can not be liquidated: LTV ratio lower than 1".into());
         }
 
@@ -377,19 +377,6 @@ impl CDPHealthChecker {
         }
 
         Ok(())
-    }
-
-    pub fn get_loan_positions_prices(&self) -> IndexMap<ResourceAddress, Decimal> {
-        self.loan_positions
-            .iter()
-            .filter(|(_, loan_position)| loan_position.data.units > dec!(0))
-            .map(|(pool_res_address, loan_position)| {
-                (
-                    *pool_res_address,
-                    loan_position.price * loan_position.data.units,
-                )
-            })
-            .collect()
     }
 
     fn get_collateral_position(
@@ -409,7 +396,7 @@ impl CDPHealthChecker {
                     asset_type: pool_state.pool_config.asset_type,
                     liquidation_bonus_rate: pool_state.pool_config.liquidation_bonus_rate,
                     liquidation_threshold: pool_state.liquidation_threshold.clone(),
-                    price: pool_state.last_price,
+                    price: pool_state.price,
                     data: PositionData {
                         units: dec!(0),
                         amount: dec!(0),
@@ -444,7 +431,7 @@ impl CDPHealthChecker {
                 ExtendedLoanPositionData {
                     pool_res_address: pool_state.pool_res_address,
 
-                    price: pool_state.last_price,
+                    price: pool_state.price,
 
                     asset_type: pool_state.pool_config.asset_type,
 
@@ -472,23 +459,9 @@ impl CDPHealthChecker {
 
     fn _update_health_check_data(&mut self) -> Result<(), String> {
         // Update the collateral positions data and calculate the total solvency value
-        let _total_solvency_value = self.collateral_positions.iter_mut().fold(
-            Ok(Decimal::ZERO),
-            |total_solvency_value: Result<Decimal, String>, (_, extended_collateral)| {
-                total_solvency_value.and_then(|current_total| {
-                    extended_collateral.update_data()?;
-
-                    let position_collaral_value =
-                        extended_collateral.data.value + extended_collateral.data.delegator_value;
-
-                    let new_total = current_total
-                        + position_collaral_value
-                            / (Decimal::ONE + extended_collateral.liquidation_bonus_rate);
-
-                    Ok(new_total)
-                })
-            },
-        )?;
+        self.collateral_positions
+            .iter_mut()
+            .try_for_each(|(_, extended_collateral)| extended_collateral.update_data())?;
 
         // Update the loan positions data and calculate the total loan value.
         // We also calculate the  discounted collateral value for each loan position weighted by the loan value
@@ -515,9 +488,6 @@ impl CDPHealthChecker {
 
                         self_loan_value += extended_loan.data.value;
 
-                        self_closable_loan_value +=
-                            extended_loan.data.value * extended_loan.loan_close_factor;
-
                         //
 
                         let position_total_loan_value =
@@ -529,6 +499,9 @@ impl CDPHealthChecker {
                             extended_loan.discounted_collateral_value * position_total_loan_value;
 
                         //
+
+                        self_closable_loan_value +=
+                            extended_loan.data.value * extended_loan.loan_close_factor;
 
                         Ok((
                             total_weighted_discounted_collateral_value,

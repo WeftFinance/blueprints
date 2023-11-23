@@ -99,7 +99,7 @@ impl WrappedCDPData {
     pub fn get_delegator_id(&self) -> Result<NonFungibleLocalId, String> {
         match &self.cdp_data.cdp_type {
             CDPType::Delegatee(delegator_info) => Ok(delegator_info.cdp_id.clone()),
-            _ => Err("WrappedCDPData/get_delegator_id: CDP is not delegator".into()),
+            _ => Err("WrappedCDPData/get_delegator_id: CDP is not delegatee".into()),
         }
     }
 

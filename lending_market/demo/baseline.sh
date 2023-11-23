@@ -88,7 +88,7 @@ export LENDING_MARKET_ADMIN_ADDRESS=$(echo "$RESULT" | sed -nr "s/.*Resource: ([
 export LENDING_MARKET_RESERVE_COLLECTOR_BADGE=$(echo "$RESULT" | sed -nr "s/.*Resource: ([[:alnum:]_]+)/\1/p" | sed '2!d')
 export LENDING_MARKET_CDP_RESOURCE_ADDRESS=$(echo "$RESULT" | sed -nr "s/.*Resource: ([[:alnum:]_]+)/\1/p" | sed '3!d')
 export LENDING_BATCH_FLASH_LOAN_RESOURCE_ADDRESS=$(echo "$RESULT" | sed -nr "s/.*Resource: ([[:alnum:]_]+)/\1/p" | sed '4!d')
-export LENDING_LIQUIDATION_TERM_RESOURCE_ADDRESS=$(echo "$RESULT" | sed -nr "s/.*Resource: ([[:alnum:]_]+)/\1/p" | sed '5!d')
+export LENDING_LIQUIDATION_TERM_RESOURCE_ADDRESS=$(echo "$RESULT" | sed -nr "s/.*Resource: ([[:alnum:]_]+)/\1/p" | sed '4!d')
 
 
 echo  "LENDING_MARKET_COMPONENT_ADDRESS $LENDING_MARKET_COMPONENT_ADDRESS"

@@ -143,7 +143,7 @@ pub fn market_update_pool_state(
     let manifest = ManifestBuilder::new().lock_fee_from_faucet().call_method(
         helper.market.market_component_address,
         "update_pool_state",
-        manifest_args!(res_address),
+        manifest_args!(res_address, true, true),
     );
 
     let receipt = helper.test_runner.execute_manifest(

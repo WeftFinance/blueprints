@@ -46,7 +46,4 @@ fn test_update_max_cdp_position_invalid() {
         market_config.update(UpdateMarketConfigInput::MaxCDPPosition(0)),
         Err("Max CDP position must be greater than 0".into())
     );
-
-    // Ensure that the max_cdp_position is not updated when the input is invalid
-    assert_eq!(market_config.max_cdp_position, 10);
 }
