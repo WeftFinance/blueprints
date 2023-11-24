@@ -21,13 +21,11 @@ impl MarketConfig {
     pub fn update(&mut self, pool_config_input: UpdateMarketConfigInput) -> Result<(), String> {
         match pool_config_input {
             UpdateMarketConfigInput::MaxCDPPosition(max_cdp_position) => {
-                if max_cdp_position == 0 {
-                    return Err("Max CDP position must be greater than 0".into());
-                }
-
                 self.max_cdp_position = max_cdp_position;
             }
         }
+
+        self.check()?;
 
         Ok(())
     }

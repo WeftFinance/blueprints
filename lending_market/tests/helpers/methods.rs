@@ -58,11 +58,12 @@ pub fn get_price(
 }
 pub fn get_resource_flash_loan(
     helper: &mut TestHelper,
-    user_public_key: Secp256k1PublicKey,
+    _user_public_key: Secp256k1PublicKey,
     _user_account_address: ComponentAddress,
     xrd_amount: Decimal,
-) -> TransactionReceipt {
-    let manifest_builder_0 = ManifestBuilder::new()
+    manifest_builder: ManifestBuilder,
+) {
+    manifest_builder
         .lock_fee_from_faucet()
         .take_from_worktop(XRD, xrd_amount, "xrd_bucket")
         .with_name_lookup(|builder, lookup| {
@@ -73,11 +74,6 @@ pub fn get_resource_flash_loan(
                 manifest_args!(helper.faucet.usdc_resource_address, xrd_buket),
             )
         });
-
-    helper.test_runner.execute_manifest(
-        build_and_dumb_to_fs(manifest_builder_0, "get_resource".into()),
-        vec![NonFungibleGlobalId::from_public_key(&user_public_key)],
-    )
 }
 
 pub fn get_resource(
@@ -147,7 +143,7 @@ pub fn market_update_pool_state(
     let manifest = ManifestBuilder::new().lock_fee_from_faucet().call_method(
         helper.market.market_component_address,
         "update_pool_state",
-        manifest_args!(res_address),
+        manifest_args!(res_address, true, true),
     );
 
     let receipt = helper.test_runner.execute_manifest(
@@ -485,32 +481,79 @@ pub fn market_end_liquidation(
     )
 }
 
-pub fn market_take_batch_flashloan(
+pub fn market_fast_liquidation(
     helper: &mut TestHelper,
     user_public_key: Secp256k1PublicKey,
-    _user_account_address: ComponentAddress,
-    loan_amounts: IndexMap<ResourceAddress, Decimal>,
+    user_account_address: ComponentAddress,
+    cdp_id: u64,
+    payments: Vec<(ResourceAddress, Decimal)>,
+    requested_collaterals: Vec<ResourceAddress>,
 ) -> TransactionReceipt {
-    let manifest_builder = ManifestBuilder::new().lock_fee_from_faucet().call_method(
-        helper.market.market_component_address,
-        "take_batch_flashloan",
-        manifest_args!(loan_amounts),
-    );
+    let mut payment_buckets = Vec::<ManifestBucket>::new();
+    let manifest_builder = ManifestBuilder::new()
+        .lock_fee_from_faucet()
+        .with_name_lookup(|builder, _lookup| {
+            let (_, newbuilder) =
+                payments
+                    .iter()
+                    .fold((0, builder), |(i, builder), (res_address, amount)| {
+                        (
+                            i,
+                            builder
+                                .withdraw_from_account(user_account_address, *res_address, *amount)
+                                .take_all_from_worktop(
+                                    *res_address,
+                                    format!("payment_bucket_{}", i),
+                                )
+                                .with_name_lookup(|builder, lookup| {
+                                    payment_buckets
+                                        .push(lookup.bucket(format!("payment_bucket_{}", i)));
+                                    builder
+                                }),
+                        )
+                    });
+
+            newbuilder.call_method(
+                helper.market.market_component_address,
+                "fast_liquidation",
+                manifest_args!(
+                    NonFungibleLocalId::integer(cdp_id),
+                    payment_buckets,
+                    requested_collaterals
+                ),
+            )
+        })
+        .deposit_batch(user_account_address);
 
     helper.test_runner.execute_manifest(
-        build_and_dumb_to_fs(manifest_builder, "take_batch_flashloan".into()),
+        build_and_dumb_to_fs(manifest_builder, "start_liquidation".into()),
         vec![NonFungibleGlobalId::from_public_key(&user_public_key)],
     )
 }
 
+pub fn market_take_batch_flashloan(
+    helper: &mut TestHelper,
+    _user_public_key: Secp256k1PublicKey,
+    _user_account_address: ComponentAddress,
+    loan_amounts: IndexMap<ResourceAddress, Decimal>,
+    manifest_builder: ManifestBuilder,
+) {
+    manifest_builder.lock_fee_from_faucet().call_method(
+        helper.market.market_component_address,
+        "take_batch_flashloan",
+        manifest_args!(loan_amounts),
+    );
+}
+
 pub fn market_repay_batch_flashloan(
     helper: &mut TestHelper,
-    user_public_key: Secp256k1PublicKey,
+    _user_public_key: Secp256k1PublicKey,
     user_account_address: ComponentAddress,
     payments: Vec<(ResourceAddress, Decimal)>,
-) -> TransactionReceipt {
+    manifest_builder: ManifestBuilder,
+) {
     let mut payment_buckets = Vec::<ManifestBucket>::new();
-    let manifest_builder = ManifestBuilder::new()
+    manifest_builder
         .lock_fee_from_faucet()
         .take_from_worktop(
             helper.market.batch_flashloan_resource_address,
@@ -547,11 +590,6 @@ pub fn market_repay_batch_flashloan(
                 )
                 .deposit_batch(user_account_address)
         });
-
-    helper.test_runner.execute_manifest(
-        build_and_dumb_to_fs(manifest_builder, "repay_batch_flashloan".into()),
-        vec![NonFungibleGlobalId::from_public_key(&user_public_key)],
-    )
 }
 
 // fn generic_txm(manifest_builder: ManifestBuilder) -> ManifestBuilder {

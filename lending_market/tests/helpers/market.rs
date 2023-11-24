@@ -5,6 +5,8 @@ use scrypto_test::prelude::*;
 use scrypto_unit::*;
 use std::path::Path;
 
+use crate::helpers::init::build_and_dumb_to_fs;
+
 use super::{faucet::FaucetTestHelper, price_feed::PriceFeedTestHelper};
 
 pub struct MarketTestHelper {
@@ -58,11 +60,10 @@ impl MarketTestHelper {
                 "instantiate",
                 manifest_args!((10u8,)),
             )
-            .deposit_batch(owner_account_address)
-            .build();
+            .deposit_batch(owner_account_address);
 
         let receipt = test_runner.execute_manifest(
-            manifest,
+            build_and_dumb_to_fs(manifest, "Instantiate_market".into()),
             vec![NonFungibleGlobalId::from_public_key(&owner_public_key)],
         );
         println!("{:?}\n", receipt);
@@ -77,7 +78,7 @@ impl MarketTestHelper {
         let market_reserve_collector_badge = resource_addresses_created[1];
         let cdp_resource_address = resource_addresses_created[2];
         let batch_flashloan_resource_address = resource_addresses_created[3];
-        let liquidation_term_resource_address = resource_addresses_created[4];
+        let liquidation_term_resource_address = resource_addresses_created[3];
 
         // // Pools
 
@@ -151,7 +152,7 @@ impl MarketTestHelper {
 
         // Initialize USD lending pool
 
-        let manifest3 = ManifestBuilder::new()
+        let manifest_builder = ManifestBuilder::new()
             .lock_fee_from_faucet()
             .create_proof_from_account_of_non_fungibles(
                 owner_account_address,
@@ -197,13 +198,13 @@ impl MarketTestHelper {
                     )
                 ),
             )
-            .deposit_batch(owner_account_address)
-            .build();
+            .deposit_batch(owner_account_address);
 
         let receipt3 = test_runner.execute_manifest(
-            manifest3,
+            build_and_dumb_to_fs(manifest_builder, "create_lending_pools".into()),
             vec![NonFungibleGlobalId::from_public_key(&owner_public_key)],
         );
+
         println!("{:?}\n", receipt3);
         let _result3 = receipt3.expect_commit(true);
 

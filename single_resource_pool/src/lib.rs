@@ -121,15 +121,12 @@ pub mod single_resource_pool {
             contribute_rule: AccessRule,
             redeem_rule: AccessRule,
         ) -> (Global<SingleResourcePool>, ResourceAddress) {
-            /* CHECK INPUT */
-            assert_fungible_res_address(pool_res_address, None);
-
             let (address_reservation, component_address) =
                 Runtime::allocate_component_address(SingleResourcePool::blueprint_id());
 
             let component_rule = rule!(require(global_caller(component_address)));
 
-            let (owned_pool_component, pool_unit_res_manager) =
+            let (owned_pool_component, pool_unit_res_address) =
                 SingleResourcePool::instantiate_locally(
                     pool_res_address,
                     owner_role.clone(),
@@ -146,7 +143,7 @@ pub mod single_resource_pool {
                 .with_address(address_reservation)
                 .globalize();
 
-            (pool_component, pool_unit_res_manager)
+            (pool_component, pool_unit_res_address)
         }
 
         pub fn get_pool_unit_ratio(&self) -> PreciseDecimal {

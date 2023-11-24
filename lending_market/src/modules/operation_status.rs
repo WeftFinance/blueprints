@@ -31,7 +31,7 @@ pub struct OperatingStatus {
     pub is_liquidate_enabled: OperatingStatusValue,
     pub is_flashloan_enabled: OperatingStatusValue,
 }
-
+//
 impl OperatingStatus {
     pub fn new() -> Self {
         Self {

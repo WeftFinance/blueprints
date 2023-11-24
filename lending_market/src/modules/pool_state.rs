@@ -1,10 +1,23 @@
 use super::operation_status::*;
-use crate::lending_market::{
-    lending_market::*, LendingPoolUpdatedEvent, LendingPoolUpdatedEventType,
-};
+use crate::lending_market::lending_market::*;
 use crate::modules::{interest_strategy::*, liquidation_threshold::*, pool_config::*, utils::*};
 use scrypto::blueprints::consensus_manager::*;
 use scrypto::prelude::*;
+
+#[derive(ScryptoSbor)]
+pub enum LendingPoolUpdatedEventType {
+    DepositState,
+    LoanState,
+    CollateralState,
+    Interest,
+    Price,
+}
+
+#[derive(ScryptoSbor, ScryptoEvent)]
+pub struct LendingPoolUpdatedEvent {
+    pub pool_res_address: ResourceAddress,
+    pub event_type: LendingPoolUpdatedEventType,
+}
 
 #[derive(ScryptoSbor)]
 pub struct LendingPoolState {
@@ -23,10 +36,16 @@ pub struct LendingPoolState {
     ///* State *///
 
     ///
-    pub last_price: Decimal,
+    pub price: Decimal,
 
     ///
     pub price_updated_at: i64,
+
+    ///
+    pub interest_rate: Decimal,
+
+    ///
+    pub interest_updated_at: i64,
 
     ///* Loan State *///
 
@@ -35,12 +54,6 @@ pub struct LendingPoolState {
 
     ///
     pub total_loan_unit: Decimal,
-
-    ///
-    pub interest_rate: Decimal,
-
-    ///
-    pub interest_updated_at: i64,
 
     ///* Configs *///
 
@@ -61,33 +74,6 @@ pub struct LendingPoolState {
 }
 
 impl LendingPoolState {
-    ///* CONFIG METHODS *///
-
-    pub fn set_price_feed(&mut self, price_feed: Global<AnyComponent>) {
-        self.price_feed_comp = price_feed;
-    }
-
-    pub fn update_config(&mut self, value: UpdatePoolConfigInput) -> Result<(), String> {
-        self.pool_config.update(value)
-    }
-
-    pub fn set_interest_strategy(
-        &mut self,
-        initial_rate: Decimal,
-        interest_options_break_points: Vec<ISInputBreakPoint>,
-    ) -> Result<(), String> {
-        self.interest_strategy
-            .set_breakpoints(initial_rate, interest_options_break_points)
-    }
-
-    pub fn update_liquidation_threshold(
-        &mut self,
-        value: UpdateLiquidationThresholdInput,
-    ) -> Result<(), String> {
-        self.liquidation_threshold
-            .update_liquidation_threshold(value)
-    }
-
     ///* OPERATING STATUS METHODS *///
 
     pub fn check_operating_status(&self, value: OperatingService) -> Result<(), String> {
@@ -130,7 +116,7 @@ impl LendingPoolState {
 
         Runtime::emit_event(LendingPoolUpdatedEvent {
             pool_res_address: self.pool_res_address,
-            event_type: LendingPoolUpdatedEventType::Deposit,
+            event_type: LendingPoolUpdatedEventType::DepositState,
         });
 
         Ok(self.pool.contribute(assets))
@@ -139,7 +125,7 @@ impl LendingPoolState {
     pub fn redeem_proxy(&self, assets: Bucket) -> Bucket {
         Runtime::emit_event(LendingPoolUpdatedEvent {
             pool_res_address: self.pool_res_address,
-            event_type: LendingPoolUpdatedEventType::Deposit,
+            event_type: LendingPoolUpdatedEventType::DepositState,
         });
 
         self.pool.redeem(assets)
@@ -158,7 +144,7 @@ impl LendingPoolState {
 
         Runtime::emit_event(LendingPoolUpdatedEvent {
             pool_res_address: self.pool_res_address,
-            event_type: LendingPoolUpdatedEventType::Collateral,
+            event_type: LendingPoolUpdatedEventType::CollateralState,
         });
 
         Ok(())
@@ -178,7 +164,7 @@ impl LendingPoolState {
 
         Runtime::emit_event(LendingPoolUpdatedEvent {
             pool_res_address: self.pool_res_address,
-            event_type: LendingPoolUpdatedEventType::Collateral,
+            event_type: LendingPoolUpdatedEventType::CollateralState,
         });
 
         Ok(self.collaterals.take_advanced(
@@ -223,7 +209,7 @@ impl LendingPoolState {
 
         Runtime::emit_event(LendingPoolUpdatedEvent {
             pool_res_address: self.pool_res_address,
-            event_type: LendingPoolUpdatedEventType::Loan,
+            event_type: LendingPoolUpdatedEventType::LoanState,
         });
 
         Ok(result)
@@ -243,7 +229,7 @@ impl LendingPoolState {
 
         Runtime::emit_event(LendingPoolUpdatedEvent {
             pool_res_address: self.pool_res_address,
-            event_type: LendingPoolUpdatedEventType::Loan,
+            event_type: LendingPoolUpdatedEventType::LoanState,
         });
 
         // returned unit should be negative or 0
@@ -251,25 +237,33 @@ impl LendingPoolState {
         Ok(-loan_unit)
     }
 
-    pub fn update_interest_and_price(&mut self) -> Result<(), String> {
-        let before = self.interest_updated_at;
+    pub fn update_interest_and_price(
+        &mut self,
+        bypass_debounce: Option<(bool, bool)>,
+    ) -> Result<(), String> {
         let now: i64 = Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch;
 
-        let period_in_minute = (now - before) / 60;
+        let (bypass_price_debounce, bypass_interest_debounce) =
+            bypass_debounce.unwrap_or((false, false));
 
         /* UPDATING PRICE */
 
         // Debounce price update to configured period (in minutes)
-        if period_in_minute >= self.pool_config.price_update_period {
+        if ((now - self.price_updated_at) / SECOND_PER_MINUTE)
+            >= self.pool_config.price_update_period
+            || bypass_price_debounce
+        {
             let price_feed_result = get_price(self.price_feed_comp, self.pool_res_address)?;
 
             // Handle price update too old
-            if (now - price_feed_result.timestamp) >= self.pool_config.price_expiration_period {
+            if ((now - price_feed_result.timestamp) / SECOND_PER_MINUTE)
+                >= self.pool_config.price_expiration_period
+            {
                 return Err("Price info is too old".to_string());
             }
 
             self.price_updated_at = now;
-            self.last_price = price_feed_result.price;
+            self.price = price_feed_result.price;
 
             Runtime::emit_event(LendingPoolUpdatedEvent {
                 pool_res_address: self.pool_res_address,
@@ -280,7 +274,8 @@ impl LendingPoolState {
         /* UPDATING INTEREST RATE */
 
         // Debounce interest update to configured period (in minutes)
-        if period_in_minute >= self.pool_config.interest_update_period {
+        let period_in_minute = (now - self.interest_updated_at) / SECOND_PER_MINUTE;
+        if period_in_minute >= self.pool_config.interest_update_period || bypass_interest_debounce {
             let (pool_available_amount, pool_borrowed_amount) = self.pool.get_pooled_amount();
 
             let pool_total_liquidity = pool_available_amount + pool_borrowed_amount;
@@ -295,31 +290,33 @@ impl LendingPoolState {
 
             self.interest_rate = self.interest_strategy.get_interest_rate(pool_utilization)?;
 
-            let minute_interest_rate = PreciseDecimal::ONE + (self.interest_rate / dec!(525600));
+            // Calculate interest rate down to a minute (1 YEAR = 525600 minutes)
+            let minute_interest_rate = PreciseDecimal::ONE + (self.interest_rate / MINUTE_PER_YEAR);
 
             let new_total_loan_amount =
                 self.total_loan * minute_interest_rate.checked_powi(period_in_minute).unwrap();
 
-            let accrued_interest = new_total_loan_amount - self.total_loan;
+            let accrued_interest_amount = new_total_loan_amount - self.total_loan;
 
             self.total_loan = new_total_loan_amount
                 .checked_truncate(RoundingMode::ToNearestMidpointToEven)
                 .unwrap();
 
-            // Increase pool liquidity
-
+            // Virtually increase pooled liquidity with accrued interest amount
             self.pool.increase_external_liquidity(
-                accrued_interest
+                accrued_interest_amount
                     .checked_truncate(RoundingMode::ToNearestMidpointToEven)
                     .unwrap(),
             );
 
-            // Collect protocol fees on accrued interest
-            let protocol_fees = accrued_interest * self.pool_config.protocol_interest_fee_rate;
+            //Calculate protocol fees on accrued interest amount
+            let protocol_fee_amount =
+                accrued_interest_amount * self.pool_config.protocol_interest_fee_rate;
 
+            // Permanent withdraw collected fee from pool to the reserve vault
             self.reserve.put(
                 self.pool.protected_withdraw(
-                    protocol_fees
+                    protocol_fee_amount
                         .checked_truncate(RoundingMode::ToNearestMidpointToEven)
                         .unwrap(),
                     WithdrawType::LiquidityWithdrawal,
@@ -336,7 +333,7 @@ impl LendingPoolState {
         Ok(())
     }
 
-    ///* CORE LOGIC AND UTILITY METHODS: PRIVATE *///
+    ///* PRIVATE UTILITY METHODS *///
 
     fn _update_loan_unit(&mut self, amount: Decimal) -> Result<Decimal, String> {
         let unit_ratio = self.get_loan_unit_ratio()?;
