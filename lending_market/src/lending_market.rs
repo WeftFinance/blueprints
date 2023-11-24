@@ -18,42 +18,23 @@ pub enum UpdateDelegateeCDPnput {
     MaxToLoanValue(Decimal),
 }
 
-#[derive(ScryptoSbor, ScryptoEvent)]
-pub struct CDPUpdatedEvent {
-    pub cdp_id: NonFungibleLocalId,
-}
-
-#[derive(ScryptoSbor, ScryptoEvent)]
-pub struct CDPLiquidatedEvent {
-    pub cdp_id: NonFungibleLocalId,
-    pub delegator_cdp_id: Option<NonFungibleLocalId>,
-}
-
-#[derive(ScryptoSbor)]
-pub enum LendingPoolUpdatedEventType {
-    Deposit,
-    Loan,
-    Collateral,
-    Interest,
-    Price,
-}
-
-#[derive(ScryptoSbor, ScryptoEvent)]
-pub struct LendingPoolUpdatedEvent {
-    pub pool_res_address: ResourceAddress,
-    pub event_type: LendingPoolUpdatedEventType,
-}
-
 #[blueprint]
-#[events(CDPUpdatedEvent, CDPLiquidatedEvent, LendingPoolUpdatedEvent)]
+#[events(CDPUpdatedEvent, LendingPoolUpdatedEvent)]
 mod lending_market {
 
     extern_blueprint!(
 
         // "package_tdx_2_1p4wnzxlrcv9s6hsy7fdv8td06up4wzwe5vjpmw8f8jgyj4z6vhqnl5",  // stokenet
-        "package_sim1ph6xspj0xlmspjju2asxg7xnucy7tk387fufs4jrfwsvt85wvqf70a",// resim
+        "package_sim1ph6xspj0xlmspjju2asxg7xnucy7tk387fufs4jrfwsvt85wvqf70a",// resim batch
+        // "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim sdk
         // "package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
         SingleResourcePool {
+
+             fn instantiate_locally(
+                pool_res_address: ResourceAddress,
+                owner_role: OwnerRole,
+                component_rule: AccessRule,
+            ) -> (Owned<SingleResourcePool>, ResourceAddress);
 
             fn instantiate(
                 pool_res_address: ResourceAddress,
@@ -150,6 +131,37 @@ mod lending_market {
             fast_liquidation => PUBLIC;
         }
 
+    }
+
+    macro_rules! single_save_cdp_macro {
+        ($self:expr,$cdp:expr) => {
+            $cdp.save_cdp(&$self.cdp_res_manager, $self.market_config.max_cdp_position)
+                .expect("Error saving CDP");
+        };
+    }
+
+    macro_rules! save_cdp_macro {
+        ($self:expr,$cdp:expr,$delegator_cdp:expr) => {
+            $cdp.save_cdp(&$self.cdp_res_manager, $self.market_config.max_cdp_position)
+                .expect("Error saving CDP");
+
+            if $delegator_cdp.is_some() {
+                $delegator_cdp
+                    .as_mut()
+                    .unwrap()
+                    .save_cdp(&$self.cdp_res_manager, $self.market_config.max_cdp_position)
+                    .expect("Error saving CDP");
+            }
+        };
+    }
+
+    macro_rules! emit_cdp_event {
+        ($cdp_id:expr,$event_type:expr) => {
+            Runtime::emit_event(CDPUpdatedEvent {
+                cdp_id: $cdp_id,
+                event_type: $event_type,
+            });
+        };
     }
 
     struct LendingMarket {
@@ -569,9 +581,7 @@ mod lending_market {
                 .increase_delegatee_count()
                 .expect("Error increasing delegatee count");
 
-            delegator_cdp_data
-                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                .expect("Error saving CDP");
+            single_save_cdp_macro!(self, delegator_cdp_data);
 
             let now = Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch;
 
@@ -666,12 +676,9 @@ mod lending_market {
             self.delegatee_cdp_ids
                 .insert((delegator_cdp_id, linked_count), delegatee_cdp_id);
 
-            delegator_cdp_data
-                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                .expect("Error saving CDP");
-            delegatee_cdp_data
-                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                .expect("Error saving CDP");
+            single_save_cdp_macro!(self, delegatee_cdp_data);
+
+            single_save_cdp_macro!(self, delegator_cdp_data);
         }
 
         pub fn unlink_cdp(
@@ -710,13 +717,9 @@ mod lending_market {
                 .decrease_delegatee_count()
                 .expect("Error decreasing delegatee count");
 
-            delegatee_cdp_data
-                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                .expect("Error saving CDP");
+            single_save_cdp_macro!(self, delegatee_cdp_data);
 
-            delegator_cdp_data
-                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                .expect("Error saving CDP");
+            single_save_cdp_macro!(self, delegator_cdp_data);
         }
 
         pub fn update_cdp(&mut self, cdp_proof: Proof, value: UpdateCDPInput) {
@@ -785,9 +788,7 @@ mod lending_market {
                 .update_delegatee_info(max_loan_value, max_loan_value_ratio)
                 .expect("Error updating delegatee info");
 
-            delegatee_cdp_data
-                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                .expect("Error saving CDP");
+            single_save_cdp_macro!(self, delegatee_cdp_data);
         }
 
         // / * Flashloan methods * ///
@@ -943,7 +944,9 @@ mod lending_market {
         pub fn add_collateral(&mut self, cdp_proof: Proof, deposits: Vec<Bucket>) {
             let cdp_id = self._validate_cdp_proof(cdp_proof);
 
-            self._deposit_internal(cdp_id, deposits);
+            self._deposit_internal(cdp_id.clone(), deposits);
+
+            emit_cdp_event!(cdp_id, CDPUpdatedEvenType::AddCollateral);
         }
 
         pub fn remove_collateral(
@@ -1006,9 +1009,9 @@ mod lending_market {
             .check_cdp()
             .expect("Error checking CDP");
 
-            cdp_data
-                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                .expect("Error saving CDP");
+            single_save_cdp_macro!(self, cdp_data);
+
+            emit_cdp_event!(cdp_id, CDPUpdatedEvenType::RemoveCollateral);
 
             withdrawals
         }
@@ -1063,17 +1066,9 @@ mod lending_market {
             .check_cdp()
             .expect("Error checking CDP");
 
-            cdp_data
-                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                .expect("Error saving CDP");
+            save_cdp_macro!(self, cdp_data, delegator_cdp_data);
 
-            if delegator_cdp_data.is_some() {
-                delegator_cdp_data
-                    .as_mut()
-                    .unwrap()
-                    .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                    .expect("Error saving CDP");
-            }
+            emit_cdp_event!(cdp_id, CDPUpdatedEvenType::Borrow);
 
             loans
         }
@@ -1118,6 +1113,8 @@ mod lending_market {
                 false,
             );
 
+            emit_cdp_event!(cdp_id, CDPUpdatedEvenType::Repay);
+
             (remainders, payment_value)
         }
 
@@ -1143,6 +1140,8 @@ mod lending_market {
                 None,
                 false,
             );
+
+            emit_cdp_event!(cdp_id, CDPUpdatedEvenType::Refinance);
 
             (remainders, payment_value)
         }
@@ -1231,12 +1230,7 @@ mod lending_market {
 
             self.transient_res_manager.burn(liquidation_term);
 
-            Runtime::emit_event(CDPLiquidatedEvent {
-                cdp_id,
-                delegator_cdp_id: delegator_cdp_data
-                    .as_ref()
-                    .map(|delegator_cdp_data| delegator_cdp_data.clone().cdp_id),
-            });
+            emit_cdp_event!(cdp_id, CDPUpdatedEvenType::Liquidate);
 
             (remainders, total_payment_value)
         }
@@ -1269,7 +1263,7 @@ mod lending_market {
                 true,
             );
 
-            info!("total_payment_value: {}", total_payment_value);
+            emit_cdp_event!(cdp_id, CDPUpdatedEvenType::Liquidate);
 
             (remainders, returned_collaterals, total_payment_value)
         }
@@ -1325,9 +1319,7 @@ mod lending_market {
                     .expect("Error adding pool units as collateral");
             });
 
-            cdp_data
-                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                .expect("Error saving CDP");
+            single_save_cdp_macro!(self, cdp_data);
         }
 
         fn _remove_collateral(
@@ -1406,9 +1398,7 @@ mod lending_market {
                 );
             }
 
-            cdp_data
-                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                .expect("Error saving CDP");
+            single_save_cdp_macro!(self, cdp_data);
 
             (returned_collaterals, returned_collaterals_value)
         }
@@ -1513,17 +1503,7 @@ mod lending_market {
                 );
             }
 
-            cdp_data
-                .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                .expect("Error saving CDP");
-
-            if cdp_data.is_delegatee() {
-                delegator_cdp_data
-                    .as_mut()
-                    .unwrap()
-                    .save_cdp(&self.cdp_res_manager, self.market_config.max_cdp_position)
-                    .expect("Error saving CDP");
-            }
+            save_cdp_macro!(self, cdp_data, delegator_cdp_data);
 
             (remainders, total_payment_value)
         }

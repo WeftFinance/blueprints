@@ -1,11 +1,23 @@
 use super::operation_status::*;
-use crate::constants::{MINUTE_PER_YEAR, SECOND_PER_MINUTE};
-use crate::lending_market::{
-    lending_market::*, LendingPoolUpdatedEvent, LendingPoolUpdatedEventType,
-};
+use crate::lending_market::lending_market::*;
 use crate::modules::{interest_strategy::*, liquidation_threshold::*, pool_config::*, utils::*};
 use scrypto::blueprints::consensus_manager::*;
 use scrypto::prelude::*;
+
+#[derive(ScryptoSbor)]
+pub enum LendingPoolUpdatedEventType {
+    DepositState,
+    LoanState,
+    CollateralState,
+    Interest,
+    Price,
+}
+
+#[derive(ScryptoSbor, ScryptoEvent)]
+pub struct LendingPoolUpdatedEvent {
+    pub pool_res_address: ResourceAddress,
+    pub event_type: LendingPoolUpdatedEventType,
+}
 
 #[derive(ScryptoSbor)]
 pub struct LendingPoolState {
@@ -104,7 +116,7 @@ impl LendingPoolState {
 
         Runtime::emit_event(LendingPoolUpdatedEvent {
             pool_res_address: self.pool_res_address,
-            event_type: LendingPoolUpdatedEventType::Deposit,
+            event_type: LendingPoolUpdatedEventType::DepositState,
         });
 
         Ok(self.pool.contribute(assets))
@@ -113,7 +125,7 @@ impl LendingPoolState {
     pub fn redeem_proxy(&self, assets: Bucket) -> Bucket {
         Runtime::emit_event(LendingPoolUpdatedEvent {
             pool_res_address: self.pool_res_address,
-            event_type: LendingPoolUpdatedEventType::Deposit,
+            event_type: LendingPoolUpdatedEventType::DepositState,
         });
 
         self.pool.redeem(assets)
@@ -132,7 +144,7 @@ impl LendingPoolState {
 
         Runtime::emit_event(LendingPoolUpdatedEvent {
             pool_res_address: self.pool_res_address,
-            event_type: LendingPoolUpdatedEventType::Collateral,
+            event_type: LendingPoolUpdatedEventType::CollateralState,
         });
 
         Ok(())
@@ -152,7 +164,7 @@ impl LendingPoolState {
 
         Runtime::emit_event(LendingPoolUpdatedEvent {
             pool_res_address: self.pool_res_address,
-            event_type: LendingPoolUpdatedEventType::Collateral,
+            event_type: LendingPoolUpdatedEventType::CollateralState,
         });
 
         Ok(self.collaterals.take_advanced(
@@ -197,7 +209,7 @@ impl LendingPoolState {
 
         Runtime::emit_event(LendingPoolUpdatedEvent {
             pool_res_address: self.pool_res_address,
-            event_type: LendingPoolUpdatedEventType::Loan,
+            event_type: LendingPoolUpdatedEventType::LoanState,
         });
 
         Ok(result)
@@ -217,7 +229,7 @@ impl LendingPoolState {
 
         Runtime::emit_event(LendingPoolUpdatedEvent {
             pool_res_address: self.pool_res_address,
-            event_type: LendingPoolUpdatedEventType::Loan,
+            event_type: LendingPoolUpdatedEventType::LoanState,
         });
 
         // returned unit should be negative or 0

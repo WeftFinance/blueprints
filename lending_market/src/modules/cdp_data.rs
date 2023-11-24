@@ -1,5 +1,20 @@
-use crate::lending_market::CDPUpdatedEvent;
 use scrypto::prelude::*;
+
+#[derive(ScryptoSbor)]
+pub enum CDPUpdatedEvenType {
+    AddCollateral,
+    RemoveCollateral,
+    Borrow,
+    Repay,
+    Liquidate,
+    Refinance,
+}
+
+#[derive(ScryptoSbor, ScryptoEvent)]
+pub struct CDPUpdatedEvent {
+    pub cdp_id: NonFungibleLocalId,
+    pub event_type: CDPUpdatedEvenType,
+}
 
 #[derive(ScryptoSbor, Clone, PartialEq, Debug)]
 pub struct DelegatorInfo {
@@ -266,10 +281,6 @@ impl WrappedCDPData {
                 "updated_at",
                 Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch,
             );
-
-            Runtime::emit_event(CDPUpdatedEvent {
-                cdp_id: self.cdp_id.clone(),
-            });
         }
 
         Ok(())

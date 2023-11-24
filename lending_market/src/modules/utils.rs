@@ -1,6 +1,11 @@
 use scrypto::prelude::*;
 
-/// Check if the given rate is between 0 and 1
+// CONSTANTS
+
+pub const SECOND_PER_MINUTE: i64 = 60;
+pub const MINUTE_PER_YEAR: i64 = 60 * 24 * 365;
+
+// Check if the given rate is between 0 and 1
 pub fn is_valid_rate(rate: Decimal) -> bool {
     rate >= dec!(0) && rate <= dec!(1)
 }
