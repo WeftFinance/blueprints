@@ -373,7 +373,7 @@ impl CDPHealthChecker {
         self._update_health_check_data()?;
 
         if self.total_loan_to_value_ratio != Decimal::MAX {
-            return Err("This CDP can not be refinanced: LTV ratio greater than 1".into());
+            return Err("This CDP can not be refinanced: CDP still has available collateral".into());
         }
 
         Ok(())

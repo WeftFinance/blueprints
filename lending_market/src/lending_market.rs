@@ -26,8 +26,8 @@ mod lending_market {
 
         // "package_tdx_2_1p4wnzxlrcv9s6hsy7fdv8td06up4wzwe5vjpmw8f8jgyj4z6vhqnl5",  // stokenet
         // "package_sim1ph6xspj0xlmspjju2asxg7xnucy7tk387fufs4jrfwsvt85wvqf70a",// resim batch
-        "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim sdk
-        // "package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
+        //"package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim sdk
+         "package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
         SingleResourcePool {
 
             fn instantiate(
@@ -963,8 +963,16 @@ mod lending_market {
             self._check_operating_status(OperatingService::RemoveCollateral);
 
             let cdp_id = self._validate_cdp_proof(cdp_proof);
+            
 
             let (mut cdp_data, _) = self._get_cdp_data(&cdp_id, false);
+
+            // RemoveCollateral from delegatee CDP is not allowed for consistency reason.
+            // Delagator and delegatee CDPs should have consistent health status
+            assert!(
+                !cdp_data.is_delegatee(),
+                "Delegatee CDP can not add collateral"
+            );
 
             let withdrawals = withdraw_details.into_iter().fold(
                 Vec::new(),
@@ -999,17 +1007,10 @@ mod lending_market {
                 },
             );
 
-            let delegator_cdp_data = match cdp_data.get_type() {
-                CDPType::Delegatee(delegator_data) => Some(WrappedCDPData::new(
-                    &self.cdp_res_manager,
-                    &delegator_data.cdp_id,
-                )),
-                _ => None,
-            };
-
+            
             CDPHealthChecker::new(
                 &cdp_data,
-                delegator_cdp_data.as_ref(),
+               None,
                 &mut self.pool_states,
             )
             .check_cdp()
@@ -1299,7 +1300,7 @@ mod lending_market {
                     (res_address, *value)
                 } else {
                     (
-                        *self.reverse_pool_unit_refs.get(&res_address).unwrap(),
+                        *self.reverse_pool_unit_refs.get(&res_address).expect("pool not found"),
                         res_address,
                     )
                 };
@@ -1340,12 +1341,12 @@ mod lending_market {
             let mut returned_collaterals: Vec<Bucket> = Vec::new();
             let mut returned_collaterals_value = dec!(0);
 
-            let mut temp_requested_value = requested_collaterals_value;
+            let mut expected_collateral_value = requested_collaterals_value;
 
             for pool_res_address in requested_collaterals {
                 // Make sure that that each requested collateral will have a bucket in the worktop
-                if temp_requested_value == dec!(0) {
-                    // returned_collaterals.push(Bucket::new(pool_res_address));
+                if expected_collateral_value == dec!(0) {
+                     returned_collaterals.push(Bucket::new(pool_res_address));
                     break;
                 }
 
@@ -1367,9 +1368,9 @@ mod lending_market {
 
                 let mut max_collateral_value = max_collateral_amount * pool_state.price;
 
-                max_collateral_value = max_collateral_value.min(bonus_rate * temp_requested_value);
+                max_collateral_value = max_collateral_value.min(bonus_rate * expected_collateral_value);
 
-                temp_requested_value -= max_collateral_value / bonus_rate;
+                expected_collateral_value -= max_collateral_value / bonus_rate;
 
                 returned_collaterals_value += max_collateral_value / bonus_rate;
 
@@ -1387,8 +1388,8 @@ mod lending_market {
 
                 let mut collaterals = pool_state.redeem_proxy(pool_unit);
                 let protocol_fee_amount = collaterals.amount()
-                    * pool_state.pool_config.protocol_liquidation_fee_rate
-                    * pool_state.pool_config.liquidation_bonus_rate;
+                    * pool_state.pool_config.liquidation_bonus_rate
+                    * pool_state.pool_config.protocol_liquidation_fee_rate;
 
                 pool_state.reserve.put(collaterals.take_advanced(
                     protocol_fee_amount,
@@ -1397,12 +1398,12 @@ mod lending_market {
 
                 returned_collaterals.push(collaterals);
             }
-
+            // Needed for fast liquidation to ensure that the return collateral correspond to loan payment made.
             if check_requested_collaterals {
                 assert!(
-                    temp_requested_value == dec!(0),
+                    expected_collateral_value == dec!(0),
                     "Insufficient collateral value, {} remaining",
-                    temp_requested_value
+                    expected_collateral_value
                 );
             }
 
@@ -1424,6 +1425,11 @@ mod lending_market {
             let (remainders, total_payment_value) = payments.into_iter().fold(
                 (Vec::new(), Decimal::zero()),
                 |(mut remainders, mut total_payment_value), mut payment| {
+                    // Liquidation
+                    if payment_value.is_some() && expected_payment_value == dec!(0) {
+                            remainders.push(payment);
+                            return (remainders,  total_payment_value); 
+                    }
                     let pool_res_address = payment.resource_address();
 
                     let mut pool_state = self._get_pool_state(&pool_res_address, None, None);

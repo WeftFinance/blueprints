@@ -34,7 +34,6 @@ fn test_update_operating_status() {
     test_update_operating_status!(operating_status, OperatingService::RemoveCollateral);
     test_update_operating_status!(operating_status, OperatingService::Borrow);
     test_update_operating_status!(operating_status, OperatingService::Repay);
-    test_update_operating_status!(operating_status, OperatingService::Refinance);
     test_update_operating_status!(operating_status, OperatingService::Liquidation);
     test_update_operating_status!(operating_status, OperatingService::Flashloan);
 }
@@ -49,7 +48,6 @@ fn test_update_operating_status_error() {
     test_update_operating_status_error!(operating_status, OperatingService::RemoveCollateral);
     test_update_operating_status_error!(operating_status, OperatingService::Borrow);
     test_update_operating_status_error!(operating_status, OperatingService::Repay);
-    test_update_operating_status_error!(operating_status, OperatingService::Refinance);
     test_update_operating_status_error!(operating_status, OperatingService::Liquidation);
     test_update_operating_status_error!(operating_status, OperatingService::Flashloan);
 }

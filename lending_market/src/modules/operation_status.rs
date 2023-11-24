@@ -14,7 +14,6 @@ pub enum OperatingService {
     RemoveCollateral,
     Borrow,
     Repay,
-    Refinance,
     Liquidation,
     Flashloan,
 }
@@ -27,7 +26,6 @@ pub struct OperatingStatus {
     pub is_withdraw_enabled: OperatingStatusValue,
     pub is_borrow_enabled: OperatingStatusValue,
     pub is_repay_enabled: OperatingStatusValue,
-    pub is_refinance_enabled: OperatingStatusValue,
     pub is_liquidate_enabled: OperatingStatusValue,
     pub is_flashloan_enabled: OperatingStatusValue,
 }
@@ -59,10 +57,6 @@ impl OperatingStatus {
                 enabled: true,
                 set_by_admin: false,
             },
-            is_refinance_enabled: OperatingStatusValue {
-                enabled: true,
-                set_by_admin: false,
-            },
             is_liquidate_enabled: OperatingStatusValue {
                 enabled: true,
                 set_by_admin: false,
@@ -87,7 +81,6 @@ impl OperatingStatus {
             OperatingService::RemoveCollateral => &mut self.is_withdraw_enabled,
             OperatingService::Borrow => &mut self.is_borrow_enabled,
             OperatingService::Repay => &mut self.is_repay_enabled,
-            OperatingService::Refinance => &mut self.is_refinance_enabled,
             OperatingService::Liquidation => &mut self.is_liquidate_enabled,
             OperatingService::Flashloan => &mut self.is_flashloan_enabled,
         };
@@ -113,7 +106,6 @@ impl OperatingStatus {
             OperatingService::RemoveCollateral => self.is_withdraw_enabled.enabled,
             OperatingService::Borrow => self.is_borrow_enabled.enabled,
             OperatingService::Repay => self.is_repay_enabled.enabled,
-            OperatingService::Refinance => self.is_refinance_enabled.enabled,
             OperatingService::Liquidation => self.is_liquidate_enabled.enabled,
             OperatingService::Flashloan => self.is_flashloan_enabled.enabled,
         }
