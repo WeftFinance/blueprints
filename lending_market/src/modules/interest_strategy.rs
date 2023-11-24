@@ -7,14 +7,14 @@ pub struct ISInputBreakPoint {
     pub slop: Decimal,
 }
 
-#[derive(ScryptoSbor, Clone, Debug)]
+#[derive(ScryptoSbor, Default, Clone, Debug)]
 pub struct ISInternalBreakPoint {
-    usage: Decimal,
-    rate: Decimal,
+    usage: Decimal, // x
+    rate: Decimal,  // y
     slop: Decimal,
 }
 
-#[derive(ScryptoSbor, Clone)]
+#[derive(ScryptoSbor, Default, Clone)]
 pub struct InterestStrategy {
     break_points: Vec<ISInternalBreakPoint>,
 }
@@ -24,28 +24,6 @@ impl InterestStrategy {
         Self {
             break_points: Vec::new(),
         }
-    }
-
-    pub fn get_interest_rate(&self, usage: Decimal) -> Result<Decimal, String> {
-        if !is_valid_rate(usage) {
-            return Err("Usage must be between 0 and 1, inclusive".into());
-        }
-
-        let len = self.break_points.len();
-        let mut j = len - 1;
-
-        for i in 0..len - 1 {
-            if self.break_points[i].usage <= usage && usage < self.break_points[i + 1].usage {
-                j = i;
-                break;
-            }
-        }
-
-        let break_point = &self.break_points[j];
-
-        let interest_rate = break_point.rate + ((usage - break_point.usage) * break_point.slop);
-
-        Ok(interest_rate)
     }
 
     pub fn set_breakpoints(
@@ -100,5 +78,27 @@ impl InterestStrategy {
         self.break_points = break_points;
 
         Ok(())
+    }
+
+    pub fn get_interest_rate(&self, usage: Decimal) -> Result<Decimal, String> {
+        if !is_valid_rate(usage) {
+            return Err("Usage must be between 0 and 1, inclusive".into());
+        }
+
+        let len = self.break_points.len();
+        let mut j = len - 1;
+
+        for i in 0..len - 1 {
+            if self.break_points[i].usage <= usage && usage < self.break_points[i + 1].usage {
+                j = i;
+                break;
+            }
+        }
+
+        let break_point = &self.break_points[j];
+
+        let interest_rate = break_point.rate + ((usage - break_point.usage) * break_point.slop);
+
+        Ok(interest_rate)
     }
 }

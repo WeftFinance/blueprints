@@ -1,8 +1,25 @@
 use scrypto::prelude::*;
 
+#[derive(ScryptoSbor)]
+pub enum CDPUpdatedEvenType {
+    AddCollateral,
+    RemoveCollateral,
+    Borrow,
+    Repay,
+    Liquidate,
+    Refinance,
+}
+
+#[derive(ScryptoSbor, ScryptoEvent)]
+pub struct CDPUpdatedEvent {
+    pub cdp_id: NonFungibleLocalId,
+    pub event_type: CDPUpdatedEvenType,
+}
+
 #[derive(ScryptoSbor, Clone, PartialEq, Debug)]
 pub struct DelegatorInfo {
     pub cdp_id: NonFungibleLocalId,
+    pub delegatee_index: u64,
     pub max_loan_value: Option<Decimal>,
     pub max_loan_value_ratio: Option<Decimal>,
 }
@@ -10,6 +27,7 @@ pub struct DelegatorInfo {
 #[derive(ScryptoSbor, Clone, PartialEq, Debug)]
 pub struct DelegateeInfo {
     pub delegatee_count: u64,
+    pub linked_count: u64,
 }
 
 #[derive(ScryptoSbor, Clone, PartialEq, Debug)]
@@ -32,16 +50,28 @@ impl CDPType {
 pub struct CollaterizedDebtPositionData {
     #[mutable]
     pub key_image_url: String,
+
     #[mutable]
     pub name: String,
+
     #[mutable]
     pub description: String,
+
+    // #[immutable]
+    pub minted_at: i64,
+
+    #[mutable]
+    pub updated_at: i64,
+
     #[mutable]
     pub cdp_type: CDPType,
+
     #[mutable]
     pub collaterals: IndexMap<ResourceAddress, Decimal>,
+
     #[mutable]
     pub loans: IndexMap<ResourceAddress, Decimal>,
+
     #[mutable]
     pub delegatee_loans: IndexMap<ResourceAddress, Decimal>,
 }
@@ -84,7 +114,7 @@ impl WrappedCDPData {
     pub fn get_delegator_id(&self) -> Result<NonFungibleLocalId, String> {
         match &self.cdp_data.cdp_type {
             CDPType::Delegatee(delegator_info) => Ok(delegator_info.cdp_id.clone()),
-            _ => Err("WrappedCDPData/get_delegator_id: CDP is not delegator".into()),
+            _ => Err("WrappedCDPData/get_delegator_id: CDP is not delegatee".into()),
         }
     }
 
@@ -100,15 +130,21 @@ impl WrappedCDPData {
         Self::get_units(&self.cdp_data.loans, loan)
     }
 
-    pub fn increase_delegatee_count(&mut self) -> Result<(), String> {
+    //
+
+    pub fn increase_delegatee_count(&mut self) -> Result<(u64, u64), String> {
         let result = match &mut self.cdp_data.cdp_type {
             CDPType::Delegator(delegatee_info) => {
                 delegatee_info.delegatee_count += 1;
-                Ok(())
+                delegatee_info.linked_count += 1;
+                Ok((delegatee_info.delegatee_count, delegatee_info.linked_count))
             }
             CDPType::Standard => {
-                self.cdp_data.cdp_type = CDPType::Delegator(DelegateeInfo { delegatee_count: 1 });
-                Ok(())
+                self.cdp_data.cdp_type = CDPType::Delegator(DelegateeInfo {
+                    delegatee_count: 1,
+                    linked_count: 1,
+                });
+                Ok((1u64, 1u64))
             }
             CDPType::Delegatee(_) => {
                 Err("WrappedCDPData/increase_delegatee_count: CDP is not delegator".into())
@@ -144,6 +180,22 @@ impl WrappedCDPData {
         self.cdp_type_updated = true;
     }
 
+    pub fn update_delegatee_info(
+        &mut self,
+        max_loan_value: Option<Decimal>,
+        max_loan_value_ratio: Option<Decimal>,
+    ) -> Result<(), String> {
+        if let CDPType::Delegatee(delegatee_info) = &mut self.cdp_data.cdp_type {
+            delegatee_info.max_loan_value = max_loan_value;
+            delegatee_info.max_loan_value_ratio = max_loan_value_ratio;
+
+            self.cdp_type_updated = true;
+            Ok(())
+        } else {
+            Err("WrappedCDPData/update_delegatee_info: CDP is not delegatee".into())
+        }
+    }
+
     pub fn update_collateral(
         &mut self,
         res_address: ResourceAddress,
@@ -174,13 +226,20 @@ impl WrappedCDPData {
         result
     }
 
-    pub fn save_cdp(&self, res_manager: &ResourceManager) -> Result<(), String> {
+    pub fn save_cdp(
+        &self,
+        res_manager: &ResourceManager,
+        max_cdp_position: u8,
+    ) -> Result<(), String> {
+        let mut updated = false;
+
         if self.cdp_type_updated {
             res_manager.update_non_fungible_data(
                 &self.cdp_id,
                 "cdp_type",
                 self.cdp_data.cdp_type.clone(),
             );
+            updated = true;
         }
 
         if self.collateral_updated {
@@ -189,6 +248,7 @@ impl WrappedCDPData {
                 "collaterals",
                 self.cdp_data.collaterals.clone(),
             );
+            updated = true;
         }
 
         if self.loan_updated {
@@ -197,6 +257,7 @@ impl WrappedCDPData {
                 "loans",
                 self.cdp_data.loans.clone(),
             );
+            updated = true;
         }
 
         if self.delegatee_loan_updated {
@@ -204,6 +265,21 @@ impl WrappedCDPData {
                 &self.cdp_id,
                 "delegatee_loans",
                 self.cdp_data.delegatee_loans.clone(),
+            );
+            updated = true;
+        }
+
+        if updated {
+            let position_count = self.cdp_data.collaterals.len()
+                + self.cdp_data.loans.len()
+                + self.cdp_data.delegatee_loans.len();
+
+            assert!(position_count as u8 <= max_cdp_position);
+
+            res_manager.update_non_fungible_data(
+                &self.cdp_id,
+                "updated_at",
+                Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch,
             );
         }
 

@@ -1,0 +1,7 @@
+[default]
+extend-ignore-identifiers-re = [
+  "package_.*",
+  "resource_.*",
+  "account_.*",
+  "component_.*",
+]

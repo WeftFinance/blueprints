@@ -1,5 +1,5 @@
 [package]
-name = "internal_price_feed"
+name = "dao_staking"
 version = "0.1.0"
 edition = "2021"
 resolver = "2"

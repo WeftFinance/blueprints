@@ -5,6 +5,8 @@ use scrypto_test::prelude::*;
 use scrypto_unit::*;
 use std::path::Path;
 
+use crate::helpers::init::build_and_dumb_to_fs;
+
 use super::{faucet::FaucetTestHelper, price_feed::PriceFeedTestHelper};
 
 pub struct MarketTestHelper {
@@ -13,7 +15,7 @@ pub struct MarketTestHelper {
     pub cdp_resource_address: ResourceAddress,
     pub market_admin_badge: ResourceAddress,
     pub market_reserve_collector_badge: ResourceAddress,
-
+    pub liquidation_term_resource_address: ResourceAddress,
     pub pools: IndexMap<ResourceAddress, (ComponentAddress, ResourceAddress)>,
 }
 
@@ -28,28 +30,27 @@ impl MarketTestHelper {
         let _pool_package_address =
             test_runner.compile_and_publish(Path::new("../single_resource_pool"));
 
-        // let manifest = ManifestBuilder::new()
-        //     .lock_fee_from_faucet()
-        //     .call_function(
-        //         _pool_package_address,
-        //         "PriceFeed",
-        //         "instantiate",
-        //         manifest_args!(),
-        //     )
-        //     .deposit_batch(owner_account_address);
+        // DONT REMOVE VERY IMPORTANT : ALLOW TO FIND THE PACKAGE ADDRESS OF single_resource_pool ON THE RTM file
+        let manifest = ManifestBuilder::new()
+            .lock_fee_from_faucet()
+            .call_function(
+                _pool_package_address,
+                "SingleResourcePool",
+                "instantiate_locally",
+                manifest_args!(),
+            )
+            .deposit_batch(owner_account_address);
 
-        // dump_manifest_to_file_system(
-        //     manifest.object_names(),
-        //     &manifest.build(),
-        //     "./rtm",
-        //     Some("publish_single_resource_pool"),
-        //     &NetworkDefinition::simulator(),
-        // )
-        // .err();
+        dump_manifest_to_file_system(
+            manifest.object_names(),
+            &manifest.build(),
+            "./rtm",
+            Some("publish_single_resource_pool"),
+            &NetworkDefinition::simulator(),
+        )
+        .err();
 
         let market_package_address = test_runner.compile_and_publish(Path::new("."));
-
-        // Initialize lending market
 
         let manifest = ManifestBuilder::new()
             .lock_fee_from_faucet()
@@ -57,13 +58,12 @@ impl MarketTestHelper {
                 market_package_address,
                 "LendingMarket",
                 "instantiate",
-                manifest_args!(None::<Decimal>, None::<Decimal>),
+                manifest_args!((10u8,)),
             )
-            .deposit_batch(owner_account_address)
-            .build();
+            .deposit_batch(owner_account_address);
 
         let receipt = test_runner.execute_manifest(
-            manifest,
+            build_and_dumb_to_fs(manifest, "Instantiate_market".into()),
             vec![NonFungibleGlobalId::from_public_key(&owner_public_key)],
         );
         println!("{:?}\n", receipt);
@@ -78,18 +78,25 @@ impl MarketTestHelper {
         let market_reserve_collector_badge = resource_addresses_created[1];
         let cdp_resource_address = resource_addresses_created[2];
         let batch_flashloan_resource_address = resource_addresses_created[3];
+        let liquidation_term_resource_address = resource_addresses_created[3];
 
-        // Pools
+        // // Pools
 
         let mut pools = IndexMap::new();
 
-        // Initialize XRD lending pool
+        // // Initialize XRD lending pool
 
         let manifest2 = ManifestBuilder::new()
             .lock_fee_from_faucet()
-            .create_proof_from_account_of_non_fungible(
+            .create_proof_from_account_of_non_fungibles(
                 owner_account_address,
-                NonFungibleGlobalId::new(market_admin_badge, NonFungibleLocalId::integer(1)),
+                market_admin_badge,
+                vec![
+                    NonFungibleLocalId::integer(1),
+                    NonFungibleLocalId::integer(2),
+                    NonFungibleLocalId::integer(3),
+                    NonFungibleLocalId::integer(4),
+                ],
             )
             .call_method(
                 market_component_address,
@@ -98,16 +105,19 @@ impl MarketTestHelper {
                     price_feed.price_feed_component_address,
                     XRD,
                     (
-                        dec!("0.25"),
-                        dec!("0.005"),
+                        dec!("0.15"),
+                        dec!("0.15"),
+                        dec!("0.15"),
+                        dec!("0.001"),
                         0u8,
                         dec!("0.05"),
-                        dec!("0"),
                         dec!("1"),
                         None::<Decimal>,
                         None::<Decimal>,
                         None::<Decimal>,
-                        1i64
+                        5i64,
+                        15i64,
+                        240i64
                     ),
                     (
                         dec!(0.05),
@@ -142,11 +152,17 @@ impl MarketTestHelper {
 
         // Initialize USD lending pool
 
-        let manifest3 = ManifestBuilder::new()
+        let manifest_builder = ManifestBuilder::new()
             .lock_fee_from_faucet()
-            .create_proof_from_account_of_non_fungible(
+            .create_proof_from_account_of_non_fungibles(
                 owner_account_address,
-                NonFungibleGlobalId::new(market_admin_badge, NonFungibleLocalId::integer(1)),
+                market_admin_badge,
+                vec![
+                    NonFungibleLocalId::integer(1),
+                    NonFungibleLocalId::integer(2),
+                    NonFungibleLocalId::integer(3),
+                    NonFungibleLocalId::integer(6),
+                ],
             )
             .call_method(
                 market_component_address,
@@ -155,16 +171,19 @@ impl MarketTestHelper {
                     price_feed.price_feed_component_address,
                     faucet.usdc_resource_address,
                     (
-                        dec!("0.25"),
-                        dec!("0.005"),
+                        dec!("0.15"),
+                        dec!("0.15"),
+                        dec!("0.15"),
+                        dec!("0.001"),
                         1u8,
                         dec!("0.05"),
-                        dec!("0"),
                         dec!("1"),
                         None::<Decimal>,
                         None::<Decimal>,
                         None::<Decimal>,
-                        1i64
+                        5i64,
+                        15i64,
+                        240i64
                     ),
                     (
                         dec!(0.05),
@@ -179,13 +198,13 @@ impl MarketTestHelper {
                     )
                 ),
             )
-            .deposit_batch(owner_account_address)
-            .build();
+            .deposit_batch(owner_account_address);
 
         let receipt3 = test_runner.execute_manifest(
-            manifest3,
+            build_and_dumb_to_fs(manifest_builder, "create_lending_pools".into()),
             vec![NonFungibleGlobalId::from_public_key(&owner_public_key)],
         );
+
         println!("{:?}\n", receipt3);
         let _result3 = receipt3.expect_commit(true);
 
@@ -203,6 +222,7 @@ impl MarketTestHelper {
             batch_flashloan_resource_address,
             cdp_resource_address,
             market_reserve_collector_badge,
+            liquidation_term_resource_address,
             pools,
         }
     }

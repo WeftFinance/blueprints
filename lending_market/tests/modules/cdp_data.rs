@@ -4,7 +4,10 @@ use scrypto_test::prelude::*;
 
 #[test]
 fn test_cdp_type_is_delegator() {
-    let delegator_info = DelegateeInfo { delegatee_count: 1 };
+    let delegator_info = DelegateeInfo {
+        delegatee_count: 1,
+        linked_count: 1,
+    };
     let cdp_type = CDPType::Delegator(delegator_info);
     assert!(cdp_type.is_delegator());
 }
@@ -19,6 +22,7 @@ fn test_cdp_type_is_not_delegator() {
 fn test_cdp_type_is_delegatee() {
     let delegatee_info = DelegatorInfo {
         cdp_id: 1u64.into(),
+        delegatee_index: 1,
         max_loan_value: Some(dec!(100)),
         max_loan_value_ratio: Some(dec!(0.5)),
     };
@@ -45,6 +49,8 @@ fn test_get_collateral_units() {
         collaterals,
         loans: IndexMap::new(),
         delegatee_loans: IndexMap::new(),
+        minted_at: 0,
+        updated_at: 0,
     };
     let wrapped_cdp_data = WrappedCDPData {
         cdp_data,
@@ -71,6 +77,8 @@ fn test_get_loan_unit() {
         collaterals: IndexMap::new(),
         loans,
         delegatee_loans: IndexMap::new(),
+        minted_at: 0,
+        updated_at: 0,
     };
     let wrapped_cdp_data = WrappedCDPData {
         cdp_data,
@@ -85,7 +93,10 @@ fn test_get_loan_unit() {
 
 #[test]
 fn test_increase_delegatee_count() {
-    let delegator_info = DelegateeInfo { delegatee_count: 0 };
+    let delegator_info = DelegateeInfo {
+        delegatee_count: 0,
+        linked_count: 0,
+    };
     let mut cdp_type = CDPType::Delegator(delegator_info);
     let mut wrapped_cdp_data = WrappedCDPData {
         cdp_data: CollaterizedDebtPositionData {
@@ -96,6 +107,8 @@ fn test_increase_delegatee_count() {
             collaterals: IndexMap::new(),
             loans: IndexMap::new(),
             delegatee_loans: IndexMap::new(),
+            minted_at: 0,
+            updated_at: 0,
         },
         cdp_id: 1u64.into(),
         cdp_type_updated: false,
@@ -105,14 +118,20 @@ fn test_increase_delegatee_count() {
     };
     wrapped_cdp_data.increase_delegatee_count().unwrap();
 
-    cdp_type = CDPType::Delegator(DelegateeInfo { delegatee_count: 1 });
+    cdp_type = CDPType::Delegator(DelegateeInfo {
+        delegatee_count: 1,
+        linked_count: 1,
+    });
 
     assert_eq!(wrapped_cdp_data.cdp_data.cdp_type, cdp_type);
 }
 
 #[test]
 fn test_decrease_delegatee_count() {
-    let delegatee_info = DelegateeInfo { delegatee_count: 1 };
+    let delegatee_info = DelegateeInfo {
+        delegatee_count: 2,
+        linked_count: 2,
+    };
     let mut cdp_type = CDPType::Delegator(delegatee_info);
     let mut wrapped_cdp_data = WrappedCDPData {
         cdp_data: CollaterizedDebtPositionData {
@@ -123,6 +142,8 @@ fn test_decrease_delegatee_count() {
             collaterals: IndexMap::new(),
             loans: IndexMap::new(),
             delegatee_loans: IndexMap::new(),
+            minted_at: 0,
+            updated_at: 0,
         },
         cdp_id: 1u64.into(),
         cdp_type_updated: false,
@@ -130,6 +151,13 @@ fn test_decrease_delegatee_count() {
         loan_updated: false,
         delegatee_loan_updated: false,
     };
+    wrapped_cdp_data.decrease_delegatee_count().unwrap();
+    cdp_type = CDPType::Delegator(DelegateeInfo {
+        delegatee_count: 1,
+        linked_count: 2,
+    });
+    assert_eq!(wrapped_cdp_data.cdp_data.cdp_type, cdp_type);
+
     wrapped_cdp_data.decrease_delegatee_count().unwrap();
     cdp_type = CDPType::Standard;
     assert_eq!(wrapped_cdp_data.cdp_data.cdp_type, cdp_type);
@@ -147,6 +175,8 @@ fn test_update_collateral() {
             collaterals: IndexMap::new(),
             loans: IndexMap::new(),
             delegatee_loans: IndexMap::new(),
+            minted_at: 0,
+            updated_at: 0,
         },
         cdp_id: 1u64.into(),
         cdp_type_updated: false,
@@ -175,6 +205,8 @@ fn test_update_loan() {
             collaterals: IndexMap::new(),
             loans: IndexMap::new(),
             delegatee_loans: IndexMap::new(),
+            minted_at: 0,
+            updated_at: 0,
         },
         cdp_id: 1u64.into(),
         cdp_type_updated: false,
@@ -202,6 +234,8 @@ fn test_update_delegatee_loan() {
             collaterals: IndexMap::new(),
             loans: IndexMap::new(),
             delegatee_loans: IndexMap::new(),
+            minted_at: 0,
+            updated_at: 0,
         },
         cdp_id: 1u64.into(),
         cdp_type_updated: false,

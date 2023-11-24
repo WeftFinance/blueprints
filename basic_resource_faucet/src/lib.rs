@@ -28,7 +28,7 @@ mod faucet {
         component_address: ComponentAddress,
         collected_xrd: Vault,
         price_feed: Global<AnyComponent>,
-        res_addresse_list: Vec<ResourceManager>,
+        res_address_list: Vec<ResourceManager>,
     }
     impl Faucet {
         pub fn instantiate(price_feed: Global<AnyComponent>) -> NonFungibleBucket {
@@ -49,7 +49,7 @@ mod faucet {
             Self {
                 admin_rule: admin_rule.clone(),
                 price_feed,
-                res_addresse_list: Vec::new(),
+                res_address_list: Vec::new(),
                 component_address,
                 collected_xrd: Vault::new(XRD),
             }
@@ -90,7 +90,7 @@ mod faucet {
                     })
                     .create_with_no_initial_supply();
 
-            self.res_addresse_list.push(res_manager);
+            self.res_address_list.push(res_manager);
 
             res_manager.mint(initial_supply)
         }
@@ -104,7 +104,7 @@ mod faucet {
         pub fn get_resource(&mut self, resource: ResourceAddress, xrd: Bucket) -> Bucket {
             assert!(
                 xrd.resource_address() == XRD,
-                "Provied XRD to get faucet tokens"
+                "Provide XRD to get faucet tokens"
             );
 
             let from_price = self.get_price(XRD);
@@ -116,7 +116,7 @@ mod faucet {
             self.collected_xrd.put(xrd);
 
             let resource_manager = self
-                .res_addresse_list
+                .res_address_list
                 .iter()
                 .find(|rm| rm.address() == resource);
 
@@ -142,7 +142,7 @@ mod faucet {
             }
 
             let resource_manager = self
-                .res_addresse_list
+                .res_address_list
                 .iter()
                 .find(|rm| rm.address() == to_resource);
 

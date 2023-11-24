@@ -100,12 +100,12 @@ impl FaucetTestHelper {
             .call_method(
                 price_feed.price_feed_component_address,
                 "admin_update_price",
-                manifest_args!(XRD, dec!(0.04)),
+                manifest_args!(XRD, dec!(1)),
             )
             .call_method(
                 price_feed.price_feed_component_address,
                 "admin_update_price",
-                manifest_args!(usdc_resource_address, dec!(1)),
+                manifest_args!(usdc_resource_address, dec!(25)),
             );
 
         let _result_2 = test_runner
