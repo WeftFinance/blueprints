@@ -25,16 +25,10 @@ mod lending_market {
     extern_blueprint!(
 
         // "package_tdx_2_1p4wnzxlrcv9s6hsy7fdv8td06up4wzwe5vjpmw8f8jgyj4z6vhqnl5",  // stokenet
-        "package_sim1ph6xspj0xlmspjju2asxg7xnucy7tk387fufs4jrfwsvt85wvqf70a",// resim batch
-        // "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim sdk
+        // "package_sim1ph6xspj0xlmspjju2asxg7xnucy7tk387fufs4jrfwsvt85wvqf70a",// resim batch
+        "package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim sdk
         // "package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
         SingleResourcePool {
-
-             fn instantiate_locally(
-                pool_res_address: ResourceAddress,
-                owner_role: OwnerRole,
-                component_rule: AccessRule,
-            ) -> (Owned<SingleResourcePool>, ResourceAddress);
 
             fn instantiate(
                 pool_res_address: ResourceAddress,
@@ -536,7 +530,7 @@ mod lending_market {
             let cdp = self.cdp_res_manager.mint_non_fungible(&cdp_id, data);
 
             if !deposits.is_empty() {
-                self._deposit_internal(cdp_id, deposits);
+                self._add_collateral_internal(cdp_id, deposits);
             }
 
             cdp
@@ -555,8 +549,7 @@ mod lending_market {
             //
 
             assert!(
-                max_loan_value_ratio.unwrap_or(0.into()) >= 0.into()
-                    && max_loan_value_ratio.unwrap_or(0.into()) <= 1.into(),
+                is_valid_rate(max_loan_value_ratio.unwrap_or(0.into())),
                 "INVALID_INPUT: Max loan to value ratio must be in the range [0, 1]"
             );
 
@@ -587,9 +580,11 @@ mod lending_market {
 
             let new_cdp_id = self._get_new_cdp_id();
 
+            let delegatee_cdp_id = NonFungibleLocalId::Integer(new_cdp_id.into());
+
             self.delegatee_cdp_ids.insert(
                 (delegator_cdp_id.clone(), linked_count),
-                NonFungibleLocalId::Integer(new_cdp_id.into()),
+                delegatee_cdp_id.clone(),
             );
 
             let delegatee_cdp_data = CollaterizedDebtPositionData {
@@ -609,7 +604,6 @@ mod lending_market {
                 updated_at: now,
             };
 
-            let delegatee_cdp_id = NonFungibleLocalId::Integer(new_cdp_id.into());
             self.cdp_res_manager
                 .mint_non_fungible(&delegatee_cdp_id, delegatee_cdp_data)
         }
@@ -622,8 +616,7 @@ mod lending_market {
             max_loan_value_ratio: Option<Decimal>,
         ) {
             assert!(
-                max_loan_value_ratio.unwrap_or(0.into()) >= 0.into()
-                    && max_loan_value_ratio.unwrap_or(0.into()) <= 1.into(),
+                is_valid_rate(max_loan_value_ratio.unwrap_or(0.into())),
                 "INVALID_INPUT: Max loan to value ratio must be in the range [0, 1]"
             );
 
@@ -761,8 +754,7 @@ mod lending_market {
             max_loan_value_ratio: Option<Decimal>,
         ) {
             assert!(
-                max_loan_value_ratio.unwrap_or(0.into()) >= 0.into()
-                    && max_loan_value_ratio.unwrap_or(0.into()) <= 1.into(),
+                is_valid_rate(max_loan_value_ratio.unwrap_or(0.into())),
                 "INVALID_INPUT: Max loan to value ratio must be in the range [0, 1]"
             );
 
@@ -810,7 +802,7 @@ mod lending_market {
 
                 let pool_state = self
                     .pool_states
-                    .get_mut(pool_res_address)
+                    .get(pool_res_address)
                     .expect("Pool state not found for provided resource");
 
                 pool_state
@@ -822,6 +814,7 @@ mod lending_market {
                 let loan_term = BatchFlashloanItem {
                     fee_amount,
                     loan_amount: *amount,
+                    paid_back: false,
                 };
 
                 let loan = pool_state.pool.protected_withdraw(
@@ -853,7 +846,7 @@ mod lending_market {
             let transient_res_data: TransientResData =
                 batch_loan_term.as_non_fungible().non_fungible().data();
 
-            let batch_loan_term_data = match transient_res_data.data {
+            let mut batch_loan_term_data = match transient_res_data.data {
                 TransientResDataType::BatchFlashloanItem(batch_loan_term_data) => {
                     batch_loan_term_data
                 }
@@ -864,8 +857,13 @@ mod lending_market {
                 let pool_res_address = payment.resource_address();
 
                 let loan_term = batch_loan_term_data
-                    .get(&pool_res_address)
+                    .get_mut(&pool_res_address)
                     .expect("flash loan term not found for provided resource");
+
+                if loan_term.paid_back {
+                    remainders.push(payment);
+                    continue;
+                }
 
                 let due_amount = loan_term.fee_amount + loan_term.loan_amount;
 
@@ -905,8 +903,16 @@ mod lending_market {
                     WithdrawStrategy::Rounded(RoundingMode::ToNearestMidpointToEven),
                 ));
 
+                loan_term.paid_back = true;
+
                 remainders.push(payment);
             }
+
+            let all_paid_back = batch_loan_term_data
+                .iter()
+                .all(|(_, loan_term)| loan_term.paid_back);
+
+            assert!(all_paid_back, "Not all loans are paid back");
 
             self.transient_res_manager.burn(batch_loan_term);
 
@@ -944,7 +950,7 @@ mod lending_market {
         pub fn add_collateral(&mut self, cdp_proof: Proof, deposits: Vec<Bucket>) {
             let cdp_id = self._validate_cdp_proof(cdp_proof);
 
-            self._deposit_internal(cdp_id.clone(), deposits);
+            self._add_collateral_internal(cdp_id.clone(), deposits);
 
             emit_cdp_event!(cdp_id, CDPUpdatedEvenType::AddCollateral);
         }
@@ -1177,12 +1183,13 @@ mod lending_market {
                 .unwrap_or(cdp_health_checker.self_closable_loan_value)
                 .min(cdp_health_checker.self_closable_loan_value);
 
-            let (returned_collaterals, total_payement_value) = self._remove_collateral(
-                delegator_cdp_data.as_mut().unwrap_or(&mut cdp_data),
-                requested_collaterals,
-                temp_total_payment_value,
-                false,
-            );
+            let (returned_collaterals, total_payement_value) = self
+                ._remove_collateral_for_liquidation(
+                    delegator_cdp_data.as_mut().unwrap_or(&mut cdp_data),
+                    requested_collaterals,
+                    temp_total_payment_value,
+                    false,
+                );
 
             let liquidation_term =
                 self.transient_res_manager
@@ -1256,12 +1263,13 @@ mod lending_market {
             let (remainders, total_payment_value) =
                 self._repay_internal(&mut cdp_data, &mut delegator_cdp_data, payments, None, true);
 
-            let (returned_collaterals, _total_payement_value) = self._remove_collateral(
-                delegator_cdp_data.as_mut().unwrap_or(&mut cdp_data),
-                requested_collaterals,
-                total_payment_value,
-                true,
-            );
+            let (returned_collaterals, _total_payement_value) = self
+                ._remove_collateral_for_liquidation(
+                    delegator_cdp_data.as_mut().unwrap_or(&mut cdp_data),
+                    requested_collaterals,
+                    total_payment_value,
+                    true,
+                );
 
             emit_cdp_event!(cdp_id, CDPUpdatedEvenType::Liquidate);
 
@@ -1270,7 +1278,7 @@ mod lending_market {
 
         //*  PRIVATE UTILITY METHODS   *//
 
-        fn _deposit_internal(&mut self, cdp_id: NonFungibleLocalId, deposits: Vec<Bucket>) {
+        fn _add_collateral_internal(&mut self, cdp_id: NonFungibleLocalId, deposits: Vec<Bucket>) {
             self._check_operating_status(OperatingService::AddCollateral);
 
             let (mut cdp_data, _) = self._get_cdp_data(&cdp_id, false);
@@ -1322,7 +1330,7 @@ mod lending_market {
             single_save_cdp_macro!(self, cdp_data);
         }
 
-        fn _remove_collateral(
+        fn _remove_collateral_for_liquidation(
             &mut self,
             cdp_data: &mut WrappedCDPData,
             requested_collaterals: Vec<ResourceAddress>,

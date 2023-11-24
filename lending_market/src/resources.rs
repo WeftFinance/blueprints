@@ -8,6 +8,7 @@ pub struct AdminBadgeData {}
 pub struct BatchFlashloanItem {
     pub loan_amount: Decimal,
     pub fee_amount: Decimal,
+    pub paid_back: bool,
 }
 
 #[derive(ScryptoSbor)]
