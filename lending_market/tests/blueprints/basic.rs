@@ -1,4 +1,7 @@
-use crate::helpers::{init::TestHelper, methods::*};
+use crate::{
+    helpers::init::*,
+    medthods::{faucet::faucet_get_resource, market::*, price_feed::*},
+};
 use radix_engine_interface::{blueprints::consensus_manager::TimePrecision, prelude::*};
 use scrypto_unit::*;
 use std::path::Path;
@@ -35,7 +38,7 @@ fn test_deposit_withdraw_borrow_repay() {
         dec!(100_000)
     );
 
-    get_resource(&mut helper, lp_user_key, lp_user_account, dec!(50_000)) //
+    faucet_get_resource(&mut helper, lp_user_key, lp_user_account, dec!(50_000)) //
         .expect_commit_success();
 
     let usd = helper.faucet.usdc_resource_address;
@@ -190,7 +193,7 @@ fn test_liquidation() {
     let (lp_user_key, _, lp_user_account) = helper.test_runner.new_allocated_account();
     helper.test_runner.load_account_from_faucet(lp_user_account);
     helper.test_runner.load_account_from_faucet(lp_user_account);
-    get_resource(&mut helper, lp_user_key, lp_user_account, dec!(25_000)) //
+    faucet_get_resource(&mut helper, lp_user_key, lp_user_account, dec!(25_000)) //
         .expect_commit_success();
 
     let usd = helper.faucet.usdc_resource_address;
@@ -249,11 +252,11 @@ fn test_liquidation() {
     );
 
     // Change XRD PRICE DROP FROM 0.04 to 0.02
-    admin_update_price(&mut helper, 1u64, XRD, dec!(0.02)).expect_commit_success();
+    price_feed_admin_update_price(&mut helper, 1u64, XRD, dec!(0.02)).expect_commit_success();
 
     helper.test_runner.set_current_epoch(epoch.next().unwrap());
 
-    get_price(&mut helper, XRD).expect_commit_success();
+    price_feed_get_price(&mut helper, XRD).expect_commit_success();
 
     // SET UP LIQUIDATOR
     let (liquidator_user_key, _, liquidator_user_account) =

@@ -42,6 +42,7 @@ impl TestHelper {
 
         let helper = Self {
             test_runner,
+
             owner_account_address,
             owner_private_key,
             owner_public_key,

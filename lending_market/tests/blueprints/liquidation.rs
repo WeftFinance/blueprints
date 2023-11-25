@@ -1,4 +1,7 @@
-use crate::helpers::{init::TestHelper, methods::*};
+use crate::{
+    helpers::init::*,
+    medthods::{faucet::*, market::*, price_feed::*},
+};
 use radix_engine_interface::{blueprints::consensus_manager::TimePrecision, prelude::*};
 
 // ! ISSUE WITH TEST RUNNER: CANNOT MOVE TIME FORWARD
@@ -15,7 +18,7 @@ fn test_liquidation() {
     let (lp_user_key, _, lp_user_account) = helper.test_runner.new_allocated_account();
     helper.test_runner.load_account_from_faucet(lp_user_account);
     helper.test_runner.load_account_from_faucet(lp_user_account);
-    get_resource(&mut helper, lp_user_key, lp_user_account, dec!(25_000)) //
+    faucet_get_resource(&mut helper, lp_user_key, lp_user_account, dec!(25_000)) //
         .expect_commit_success();
 
     let usd = helper.faucet.usdc_resource_address;
@@ -67,7 +70,7 @@ fn test_liquidation() {
     .expect_commit_success();
 
     // Change USD (in XRD) PRICE DROP FROM 25 to 10
-    admin_update_price(&mut helper, 1u64, usd, dec!(27)).expect_commit_success();
+    price_feed_admin_update_price(&mut helper, 1u64, usd, dec!(27)).expect_commit_success();
 
     market_update_pool_state(&mut helper, usd).expect_commit_success();
 
@@ -82,7 +85,7 @@ fn test_liquidation() {
         .get_component_balance(liquidator_user_account, XRD);
 
     // SWAP Collateral XRD TO LOAN USD
-    swap(
+    faucet_swap(
         &mut helper,
         liquidator_user_account,
         liquidator_user_key,

@@ -19,7 +19,6 @@ impl FaucetTestHelper {
         test_runner: &mut TestRunner<NoExtension, InMemorySubstateDatabase>,
         owner_account_address: ComponentAddress,
         owner_public_key: Secp256k1PublicKey,
-        // owner_badge_resource_address: ResourceAddress,
         price_feed: &PriceFeedTestHelper,
     ) -> FaucetTestHelper {
         let faucet_package_address =
@@ -44,6 +43,7 @@ impl FaucetTestHelper {
             build_and_dumb_to_fs(manifest_builder_0, "faucet_instantiate".into()),
             vec![NonFungibleGlobalId::from_public_key(&owner_public_key)],
         );
+
         let result_0 = receipt_0.expect_commit(true);
 
         let component_addresses_created = result_0.new_component_addresses();

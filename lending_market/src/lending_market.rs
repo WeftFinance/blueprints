@@ -963,7 +963,6 @@ mod lending_market {
             self._check_operating_status(OperatingService::RemoveCollateral);
 
             let cdp_id = self._validate_cdp_proof(cdp_proof);
-            
 
             let (mut cdp_data, _) = self._get_cdp_data(&cdp_id, false);
 
@@ -1007,14 +1006,9 @@ mod lending_market {
                 },
             );
 
-            
-            CDPHealthChecker::new(
-                &cdp_data,
-               None,
-                &mut self.pool_states,
-            )
-            .check_cdp()
-            .expect("Error checking CDP");
+            CDPHealthChecker::new(&cdp_data, None, &mut self.pool_states)
+                .check_cdp()
+                .expect("Error checking CDP");
 
             single_save_cdp_macro!(self, cdp_data);
 
@@ -1300,7 +1294,10 @@ mod lending_market {
                     (res_address, *value)
                 } else {
                     (
-                        *self.reverse_pool_unit_refs.get(&res_address).expect("pool not found"),
+                        *self
+                            .reverse_pool_unit_refs
+                            .get(&res_address)
+                            .expect("pool not found"),
                         res_address,
                     )
                 };
@@ -1346,7 +1343,7 @@ mod lending_market {
             for pool_res_address in requested_collaterals {
                 // Make sure that that each requested collateral will have a bucket in the worktop
                 if expected_collateral_value == dec!(0) {
-                     returned_collaterals.push(Bucket::new(pool_res_address));
+                    returned_collaterals.push(Bucket::new(pool_res_address));
                     break;
                 }
 
@@ -1368,7 +1365,8 @@ mod lending_market {
 
                 let mut max_collateral_value = max_collateral_amount * pool_state.price;
 
-                max_collateral_value = max_collateral_value.min(bonus_rate * expected_collateral_value);
+                max_collateral_value =
+                    max_collateral_value.min(bonus_rate * expected_collateral_value);
 
                 expected_collateral_value -= max_collateral_value / bonus_rate;
 
@@ -1427,8 +1425,8 @@ mod lending_market {
                 |(mut remainders, mut total_payment_value), mut payment| {
                     // Liquidation
                     if payment_value.is_some() && expected_payment_value == dec!(0) {
-                            remainders.push(payment);
-                            return (remainders,  total_payment_value); 
+                        remainders.push(payment);
+                        return (remainders, total_payment_value);
                     }
                     let pool_res_address = payment.resource_address();
 

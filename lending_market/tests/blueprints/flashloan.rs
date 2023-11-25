@@ -1,4 +1,7 @@
-use crate::helpers::{init::TestHelper, methods::*};
+use crate::{
+    helpers::init::*,
+    medthods::{faucet::*, market::*},
+};
 use radix_engine_interface::prelude::*;
 use transaction::builder::ManifestBuilder;
 
@@ -17,8 +20,8 @@ pub fn test_invalid_flash_loan() {
     helper.test_runner.load_account_from_faucet(lp_user_account);
     helper.test_runner.load_account_from_faucet(lp_user_account);
 
-    get_resource(&mut helper, lp_user_key, lp_user_account, dec!(10_000));
-    get_resource(&mut helper, lp_user_key, lp_user_account, dec!(10_000));
+    faucet_get_resource(&mut helper, lp_user_key, lp_user_account, dec!(10_000));
+    faucet_get_resource(&mut helper, lp_user_key, lp_user_account, dec!(10_000));
 
     // Provide 15000 XRD
     market_contribute(&mut helper, lp_user_key, lp_user_account, XRD, dec!(15_000))
@@ -98,8 +101,8 @@ pub fn test_valid_flash_loan() {
     helper.test_runner.load_account_from_faucet(lp_user_account);
     helper.test_runner.load_account_from_faucet(lp_user_account);
 
-    get_resource(&mut helper, lp_user_key, lp_user_account, dec!(10_000));
-    get_resource(&mut helper, lp_user_key, lp_user_account, dec!(10_000));
+    faucet_get_resource(&mut helper, lp_user_key, lp_user_account, dec!(10_000));
+    faucet_get_resource(&mut helper, lp_user_key, lp_user_account, dec!(10_000));
 
     // Provide 15000 XRD
     market_contribute(&mut helper, lp_user_key, lp_user_account, XRD, dec!(15_000))
