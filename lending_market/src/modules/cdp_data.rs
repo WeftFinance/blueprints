@@ -167,7 +167,7 @@ impl WrappedCDPData {
                 Ok(())
             }
 
-            _ => Err("WrappedCDPData/increase_delegatee_count: CDP is not delegator".into()),
+            _ => Err("WrappedCDPData/decrease_delegatee_count: CDP is not delegator".into()),
         };
 
         self.cdp_type_updated = true;

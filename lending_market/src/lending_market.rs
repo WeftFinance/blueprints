@@ -24,10 +24,10 @@ mod lending_market {
 
     extern_blueprint!(
 
-        // "package_tdx_2_1p4wnzxlrcv9s6hsy7fdv8td06up4wzwe5vjpmw8f8jgyj4z6vhqnl5",  // stokenet
+        "package_tdx_2_1p597x7wewk0s69tkl7yc0z3nftq4nzhslujrpp9h79ctxav9s6gfh8",  // stokenet
         // "package_sim1ph6xspj0xlmspjju2asxg7xnucy7tk387fufs4jrfwsvt85wvqf70a",// resim batch
         //"package_sim1pkwaf2l9zkmake5h924229n44wp5pgckmpn0lvtucwers56awywems", // resim sdk
-         "package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
+        //  "package_sim1ph8fqgwl6sdmlxxv06sf2sgk3jp9l5vrrc2enpqm5hx686auz0d9k5", // testing
         SingleResourcePool {
 
             fn instantiate(
@@ -127,7 +127,7 @@ mod lending_market {
 
     }
 
-    macro_rules! single_save_cdp_macro {
+    macro_rules! save_single_cdp_macro {
         ($self:expr,$cdp:expr) => {
             $cdp.save_cdp(&$self.cdp_res_manager, $self.market_config.max_cdp_position)
                 .expect("Error saving CDP");
@@ -155,6 +155,15 @@ mod lending_market {
                 cdp_id: $cdp_id,
                 event_type: $event_type,
             });
+        };
+    }
+
+    macro_rules! check_cdp_health {
+        ($self:expr,$cdp_data:expr,$delegator_cdp_data:expr,$check_type:expr) => {
+            CDPHealthChecker::new($cdp_data, $delegator_cdp_data, &mut $self.pool_states)
+                .expect("Error creating CDPHealthChecker")
+                .check_cdp($check_type)
+                .expect("Error checking CDP")
         };
     }
 
@@ -313,7 +322,7 @@ mod lending_market {
 
             let (pool, pool_unit_res_address) = Blueprint::<SingleResourcePool>::instantiate(
                 pool_res_address,
-                OwnerRole::None,
+                OwnerRole::Fixed(self.admin_rule.clone()),
                 component_rule.clone(),
                 component_rule.clone(),
                 component_rule,
@@ -574,7 +583,7 @@ mod lending_market {
                 .increase_delegatee_count()
                 .expect("Error increasing delegatee count");
 
-            single_save_cdp_macro!(self, delegator_cdp_data);
+            save_single_cdp_macro!(self, delegator_cdp_data);
 
             let now = Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch;
 
@@ -658,20 +667,19 @@ mod lending_market {
                 max_loan_value,
             }));
 
-            CDPHealthChecker::new(
+            check_cdp_health!(
+                self,
                 &delegatee_cdp_data,
                 Some(&delegator_cdp_data),
-                &mut self.pool_states,
-            )
-            .check_cdp()
-            .expect("Error checking CDP");
+                CDPCheck::Healthy
+            );
 
             self.delegatee_cdp_ids
                 .insert((delegator_cdp_id, linked_count), delegatee_cdp_id);
 
-            single_save_cdp_macro!(self, delegatee_cdp_data);
+            save_single_cdp_macro!(self, delegatee_cdp_data);
 
-            single_save_cdp_macro!(self, delegator_cdp_data);
+            save_single_cdp_macro!(self, delegator_cdp_data);
         }
 
         pub fn unlink_cdp(
@@ -702,17 +710,15 @@ mod lending_market {
 
             delegatee_cdp_data.update_cdp_type(CDPType::Standard);
 
-            CDPHealthChecker::new(&delegatee_cdp_data, None, &mut self.pool_states)
-                .check_cdp()
-                .expect("Error checking CDP");
+            check_cdp_health!(self, &delegatee_cdp_data, None, CDPCheck::Healthy);
 
             delegator_cdp_data
                 .decrease_delegatee_count()
                 .expect("Error decreasing delegatee count");
 
-            single_save_cdp_macro!(self, delegatee_cdp_data);
+            save_single_cdp_macro!(self, delegatee_cdp_data);
 
-            single_save_cdp_macro!(self, delegator_cdp_data);
+            save_single_cdp_macro!(self, delegator_cdp_data);
         }
 
         pub fn update_cdp(&mut self, cdp_proof: Proof, value: UpdateCDPInput) {
@@ -780,7 +786,7 @@ mod lending_market {
                 .update_delegatee_info(max_loan_value, max_loan_value_ratio)
                 .expect("Error updating delegatee info");
 
-            single_save_cdp_macro!(self, delegatee_cdp_data);
+            save_single_cdp_macro!(self, delegatee_cdp_data);
         }
 
         // / * Flashloan methods * ///
@@ -1006,11 +1012,9 @@ mod lending_market {
                 },
             );
 
-            CDPHealthChecker::new(&cdp_data, None, &mut self.pool_states)
-                .check_cdp()
-                .expect("Error checking CDP");
+            check_cdp_health!(self, &cdp_data, None, CDPCheck::Healthy);
 
-            single_save_cdp_macro!(self, cdp_data);
+            save_single_cdp_macro!(self, cdp_data);
 
             emit_cdp_event!(cdp_id, CDPUpdatedEvenType::RemoveCollateral);
 
@@ -1059,13 +1063,12 @@ mod lending_market {
                         loans
                     });
 
-            CDPHealthChecker::new(
+            check_cdp_health!(
+                self,
                 &cdp_data,
                 delegator_cdp_data.as_ref(),
-                &mut self.pool_states,
-            )
-            .check_cdp()
-            .expect("Error checking CDP");
+                CDPCheck::Healthy
+            );
 
             save_cdp_macro!(self, cdp_data, delegator_cdp_data);
 
@@ -1126,13 +1129,12 @@ mod lending_market {
         ) -> (Vec<Bucket>, Decimal) {
             let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
 
-            CDPHealthChecker::new(
+            check_cdp_health!(
+                self,
                 &cdp_data,
                 delegator_cdp_data.as_ref(),
-                &mut self.pool_states,
-            )
-            .can_refinance()
-            .expect("Error checking CDP");
+                CDPCheck::Refinance
+            );
 
             let (remainders, payment_value) = self._repay_internal(
                 &mut cdp_data,
@@ -1168,10 +1170,11 @@ mod lending_market {
                 &cdp_data,
                 delegator_cdp_data.as_ref(),
                 &mut self.pool_states,
-            );
+            )
+            .expect("Error creating CDP health checker");
 
             cdp_health_checker
-                .can_liquidate()
+                .check_cdp(CDPCheck::Liquidate)
                 .expect("Error checking CDP");
 
             let temp_total_payment_value = total_payment_value
@@ -1247,13 +1250,12 @@ mod lending_market {
 
             let (mut cdp_data, mut delegator_cdp_data) = self._get_cdp_data(&cdp_id, true);
 
-            CDPHealthChecker::new(
+            check_cdp_health!(
+                self,
                 &cdp_data,
                 delegator_cdp_data.as_ref(),
-                &mut self.pool_states,
-            )
-            .can_liquidate()
-            .expect("Error checking CDP");
+                CDPCheck::Liquidate
+            );
 
             let (remainders, total_payment_value) =
                 self._repay_internal(&mut cdp_data, &mut delegator_cdp_data, payments, None, true);
@@ -1325,7 +1327,7 @@ mod lending_market {
                     .expect("Error adding pool units as collateral");
             });
 
-            single_save_cdp_macro!(self, cdp_data);
+            save_single_cdp_macro!(self, cdp_data);
         }
 
         fn _remove_collateral_for_liquidation(
@@ -1405,7 +1407,7 @@ mod lending_market {
                 );
             }
 
-            single_save_cdp_macro!(self, cdp_data);
+            save_single_cdp_macro!(self, cdp_data);
 
             (returned_collaterals, returned_collaterals_value)
         }

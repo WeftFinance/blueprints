@@ -13,6 +13,12 @@ pub enum LoadDataType {
     Delegator,
 }
 
+pub enum CDPCheck {
+    Liquidate,
+    Refinance,
+    Healthy,
+}
+
 #[derive(ScryptoSbor, Debug, Clone)]
 pub struct PositionData {
     pub units: Decimal,
@@ -183,16 +189,16 @@ pub struct CDPHealthChecker {
 impl CDPHealthChecker {
     // Created an extended CDP from a CDP NFT data
 
-    pub fn new(
-        wrapped_cdp_data: &WrappedCDPData,
-        wrapped_delegator_cdp_data: Option<&WrappedCDPData>,
-        pool_states: &mut KeyValueStore<ResourceAddress, LendingPoolState>,
-    ) -> CDPHealthChecker {
-        Self::create_health_checker(wrapped_cdp_data, wrapped_delegator_cdp_data, pool_states)
-            .expect("Error creating CDP health checker")
-    }
+    // pub fn new(
+    //     wrapped_cdp_data: &WrappedCDPData,
+    //     wrapped_delegator_cdp_data: Option<&WrappedCDPData>,
+    //     pool_states: &mut KeyValueStore<ResourceAddress, LendingPoolState>,
+    // ) -> Result<CDPHealthChecker, String> {
+    //     Self::create_health_checker(wrapped_cdp_data, wrapped_delegator_cdp_data, pool_states)
+    //     // .expect("Error creating CDP health checker")
+    // }
 
-    fn create_health_checker(
+    pub fn new(
         wrapped_cdp_data: &WrappedCDPData,
         wrapped_delegator_cdp_data: Option<&WrappedCDPData>,
         pool_states: &mut KeyValueStore<ResourceAddress, LendingPoolState>,
@@ -327,7 +333,17 @@ impl CDPHealthChecker {
         Ok(extended_cdp)
     }
 
-    pub fn check_cdp(&mut self) -> Result<(), String> {
+    pub fn check_cdp(&mut self, check_type: CDPCheck) -> Result<(), String> {
+        self._update_health_check_data()?;
+
+        match check_type {
+            CDPCheck::Liquidate => self.can_liquidate(),
+            CDPCheck::Refinance => self.can_refinance(),
+            CDPCheck::Healthy => self.is_healthy(),
+        }
+    }
+
+    fn is_healthy(&mut self) -> Result<(), String> {
         self._update_health_check_data()?;
 
         if self.total_loan_to_value_ratio > Decimal::ONE {
@@ -359,7 +375,7 @@ impl CDPHealthChecker {
         Ok(())
     }
 
-    pub fn can_liquidate(&mut self) -> Result<(), String> {
+    fn can_liquidate(&mut self) -> Result<(), String> {
         self._update_health_check_data()?;
 
         if self.total_loan_to_value_ratio <= Decimal::ONE {
@@ -369,11 +385,13 @@ impl CDPHealthChecker {
         Ok(())
     }
 
-    pub fn can_refinance(&mut self) -> Result<(), String> {
+    fn can_refinance(&mut self) -> Result<(), String> {
         self._update_health_check_data()?;
 
         if self.total_loan_to_value_ratio != Decimal::MAX {
-            return Err("This CDP can not be refinanced: CDP still has available collateral".into());
+            return Err(
+                "This CDP can not be refinanced: CDP still has available collateral".into(),
+            );
         }
 
         Ok(())
