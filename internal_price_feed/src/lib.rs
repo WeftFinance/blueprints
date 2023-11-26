@@ -14,9 +14,13 @@ pub struct UpdaterBadgeData {
     pub active: bool,
 }
 
+// Recuperer les informations de prix ressource (xrd/usdt/usdc) en s'appuyant sur des api externes
+// et les ramener dans un environnement exploitable depuis des composants Radix
+
 #[blueprint]
 mod price_feed {
 
+// structure pour definir les autorisations pour chaque methode definies
     enable_method_auth! {
         roles {
             admin => updatable_by: [];
@@ -32,7 +36,9 @@ mod price_feed {
             get_price => PUBLIC;
         }
     }
-
+    
+    // la structure permettant d'acceder aux informations de l'instance de code.
+    // elle reste contextuelle a une instance precise et persistente pour permettre une exploitation
     pub struct PriceFeed {
         prices: IndexMap<ResourceAddress, PriceInfo>,
         updater_badge_manager: ResourceManager,
@@ -41,38 +47,63 @@ mod price_feed {
 
     impl PriceFeed {
         pub fn instantiate() -> NonFungibleBucket {
-            let (component_address_reservation, component_address) =
-                Runtime::allocate_component_address(PriceFeed::blueprint_id());
 
-            let component_rule = rule!(require(global_caller(component_address)));
+        // reservation d'adresse effectue par le bias d'une fonction standard.
+            let (component_address_reservation /*informations permettant de creer l'adresse*/, 
+                component_address/*adresse effectivement sollicitee*/) /* le retour de la fonction*/ 
+                =
+                Runtime::allocate_component_address(PriceFeed::blueprint_id()) /*la fonction d'appel qui ramene le couple.'*/;
+
+                // la creation de la regle associee au composant
+
+            let component_rule /*le nom de la regle*/ = 
+            
+            rule!( /* utilisation de la macro rule! qui permet la generation d'un code' */
+                require( /*indique que la regle est requise*/
+                    global_caller( /*indique que l'appel depuis un acteur virtuel (tous les appels qui ne sont pas faite par un homme)'*/
+                        component_address /*exploitation de l'adresse reservee pour creer la regle'*/
+                    )
+                )
+            );
 
             let (admin_badge_address_reservation, admin_badge_address) =
                 Runtime::allocate_non_fungible_address();
+            // la creation de regle associee a une ressource utilisee comme badge administrateur
+            let admin_rule = rule!(
+                require(
+                    admin_badge_address
+                )
+            );
 
-            let admin_rule = rule!(require(admin_badge_address));
 
+            // permettre d'attribuer le role owner a la ressource en cours de creation
             let admin_badge = ResourceBuilder::new_integer_non_fungible::<AuthBadgeData>(
                 OwnerRole::Fixed(admin_rule),
             )
             .with_address(admin_badge_address_reservation)
             .mint_initial_supply([(IntegerNonFungibleLocalId::from(1), AuthBadgeData {})]);
 
-            let admin_rule = rule!(require(admin_badge.resource_address()));
+            //mis en commentaire parceque deja fait plus haut
+            //let admin_rule = rule!(require(admin_badge.resource_address()));
 
+
+
+            // permet de definir des regles de gestion des badges lorsqu'on souhaite un comportement differents des attributs par defaut
             let updater_badge_manager =
                 ResourceBuilder::new_integer_non_fungible::<UpdaterBadgeData>(OwnerRole::Fixed(
-                    admin_rule.clone(),
-                ))
+                    admin_rule.clone(), //
+                )) 
                 .mint_roles(mint_roles! {
-                    minter => component_rule.clone();
-                    minter_updater =>  rule!(deny_all);
+                    minter => component_rule.clone();   // seul le composant en cours peut creer un badge de update du prix
+                    minter_updater =>  rule!(deny_all); // personne ne peut changer la regle
                 })
-                .non_fungible_data_update_roles(non_fungible_data_update_roles! {
-                  non_fungible_data_updater => component_rule;
+                .non_fungible_data_update_roles(non_fungible_data_update_roles! { 
+                  non_fungible_data_updater => component_rule; 
                   non_fungible_data_updater_updater => rule!(deny_all);
                 })
                 .create_with_no_initial_supply();
 
+            // initialisation effective de l'instance
             Self {
                 prices: IndexMap::new(),
                 updater_badge_manager,
@@ -92,6 +123,7 @@ mod price_feed {
 
         // * Admin Methods * //
 
+        // permet de creer un badge
         pub fn mint_updater_badge(&mut self, active: bool) -> Bucket {
             let badge_id = NonFungibleLocalId::Integer(self._get_new_id().into());
 
@@ -99,11 +131,13 @@ mod price_feed {
                 .mint_non_fungible(&badge_id, UpdaterBadgeData { active })
         }
 
+        // permet de faire une mise a jour d'un badge existant
         pub fn update_updater_badge(&self, local_id: NonFungibleLocalId, active: bool) {
             self.updater_badge_manager
                 .update_non_fungible_data(&local_id, "active", active);
         }
 
+        // permet de definir le prix en exploitant les privileges d'administrateur
         pub fn admin_update_price(&mut self, resource: ResourceAddress, price: Decimal) {
             let now = Clock::current_time(TimePrecision::Minute).seconds_since_unix_epoch;
             self.prices.insert(
@@ -116,7 +150,7 @@ mod price_feed {
         }
 
         // * Updater Methods * //
-
+        // permet de mettre a jour le prix en exploitant le badge genere par l'adinistrateur plus haut
         pub fn update_price(
             &mut self,
             badge_proof: Proof,
@@ -144,12 +178,13 @@ mod price_feed {
 
         // * Public Methods * //
 
+        // permet d'obtenir le prix d'une ressource
         pub fn get_price(&self, quote: ResourceAddress) -> Option<PriceInfo> {
             self.prices.get(&quote).cloned()
         }
 
         // * Helpers * //
-
+        // permet d'obtenir un nouvel ID
         fn _get_new_id(&mut self) -> u64 {
             self.updater_counter += 1;
             self.updater_counter
