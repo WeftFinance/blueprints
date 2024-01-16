@@ -14,13 +14,13 @@ pub struct UpdaterBadgeData {
     pub active: bool,
 }
 
-// Recuperer les informations de prix ressource (xrd/usdt/usdc) en s'appuyant sur des api externes
-// et les ramener dans un environnement exploitable depuis des composants Radix
+// Recuperer les information de prix resource (xrd/usdt/usdc) en s'appuyant sure des api externes
+// et les ramener dans un environment exploitable depuis des composants Radix
 
 #[blueprint]
 mod price_feed {
 
-// structure pour definir les autorisations pour chaque methode definies
+// structure pour definir les autorisations pour chaque method definies
     enable_method_auth! {
         roles {
             admin => updatable_by: [];
@@ -37,8 +37,8 @@ mod price_feed {
         }
     }
     
-    // la structure permettant d'acceder aux informations de l'instance de code.
-    // elle reste contextuelle a une instance precise et persistente pour permettre une exploitation
+    // la structure permettant d'acceder aux information de l'instance de code.
+    // elle reste contextuelle a une instance precise et persistence pour permettre une exploitation
     pub struct PriceFeed {
         prices: IndexMap<ResourceAddress, PriceInfo>,
         updater_badge_manager: ResourceManager,
@@ -48,11 +48,11 @@ mod price_feed {
     impl PriceFeed {
         pub fn instantiate() -> NonFungibleBucket {
 
-        // reservation d'adresse effectue par le bias d'une fonction standard.
-            let (component_address_reservation /*informations permettant de creer l'adresse*/, 
-                component_address/*adresse effectivement sollicitee*/) /* le retour de la fonction*/ 
+        // reservation d'address effectue par le bias d'une function standard.
+            let (component_address_reservation /*information permettant de creer l'address*/, 
+                component_address/*address effectivement sollicitee*/) /* le retour de la function*/ 
                 =
-                Runtime::allocate_component_address(PriceFeed::blueprint_id()) /*la fonction d'appel qui ramene le couple.'*/;
+                Runtime::allocate_component_address(PriceFeed::blueprint_id()) /*la function d'appel qui ramene le couple.'*/;
 
                 // la creation de la regle associee au composant
 
@@ -61,14 +61,14 @@ mod price_feed {
             rule!( /* utilisation de la macro rule! qui permet la generation d'un code' */
                 require( /*indique que la regle est requise*/
                     global_caller( /*indique que l'appel depuis un acteur virtuel (tous les appels qui ne sont pas faite par un homme)'*/
-                        component_address /*exploitation de l'adresse reservee pour creer la regle'*/
+                        component_address /*exploitation de l'address reservee pour creer la regle'*/
                     )
                 )
             );
 
             let (admin_badge_address_reservation, admin_badge_address) =
                 Runtime::allocate_non_fungible_address();
-            // la creation de regle associee a une ressource utilisee comme badge administrateur
+            // la creation de regle associee a une resource utilisee comme badge administrateur
             let admin_rule = rule!(
                 require(
                     admin_badge_address
@@ -76,19 +76,14 @@ mod price_feed {
             );
 
 
-            // permettre d'attribuer le role owner a la ressource en cours de creation
+            // permettre d'attribuer le role owner a la resource en cours de creation
             let admin_badge = ResourceBuilder::new_integer_non_fungible::<AuthBadgeData>(
-                OwnerRole::Fixed(admin_rule),
+                OwnerRole::Fixed(admin_rule.clone()),
             )
             .with_address(admin_badge_address_reservation)
             .mint_initial_supply([(IntegerNonFungibleLocalId::from(1), AuthBadgeData {})]);
 
-            //mis en commentaire parceque deja fait plus haut
-            //let admin_rule = rule!(require(admin_badge.resource_address()));
-
-
-
-            // permet de definir des regles de gestion des badges lorsqu'on souhaite un comportement differents des attributs par defaut
+            // permet de definir des regles de gestion des badges lorsqu'on souhaite un comportement differents des attributes par default
             let updater_badge_manager =
                 ResourceBuilder::new_integer_non_fungible::<UpdaterBadgeData>(OwnerRole::Fixed(
                     admin_rule.clone(), //
@@ -131,7 +126,7 @@ mod price_feed {
                 .mint_non_fungible(&badge_id, UpdaterBadgeData { active })
         }
 
-        // permet de faire une mise a jour d'un badge existant
+        // permet de faire une mise a jour d'un badge existent
         pub fn update_updater_badge(&self, local_id: NonFungibleLocalId, active: bool) {
             self.updater_badge_manager
                 .update_non_fungible_data(&local_id, "active", active);
@@ -178,9 +173,11 @@ mod price_feed {
 
         // * Public Methods * //
 
-        // permet d'obtenir le prix d'une ressource
+        // permet d'obtenir le prix d'une resource
         pub fn get_price(&self, quote: ResourceAddress) -> Option<PriceInfo> {
-            self.prices.get(&quote).cloned()
+            let price = self.prices.get(&quote);
+
+            price.cloned()
         }
 
         // * Helpers * //

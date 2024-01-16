@@ -17,7 +17,27 @@ pub struct TestHelper {
 
 impl TestHelper {
     pub fn new() -> TestHelper {
-        let mut test_runner = TestRunnerBuilder::new().build();
+        //     test_runner.advance_to_round_at_timestamp(
+        //         Round::of(2), // make sure to increment
+        //         datetime_timestamp(2022, 1, 1, 0, 0, 0) * 1000,
+        //     );
+
+        // You also need to setup test runner with:
+        //         let mut test_runner = TestRunnerBuilder::new()
+        //             .with_custom_genesis(CustomGenesis::default(
+        //                 Epoch::of(1),
+        //                 CustomGenesis::default_consensus_manager_config(),
+        //             ))
+        //             .without_trace()
+        //             .build();
+
+        let mut test_runner = TestRunnerBuilder::new()
+            .with_custom_genesis(CustomGenesis::default(
+                Epoch::of(1),
+                CustomGenesis::default_consensus_manager_config(),
+            ))
+            .without_trace()
+            .build();
 
         let (owner_public_key, owner_private_key, owner_account_address) =
             test_runner.new_allocated_account();

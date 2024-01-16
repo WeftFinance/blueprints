@@ -458,21 +458,3 @@ pub fn market_repay_batch_flashloan(
                 .deposit_batch(user_account_address)
         });
 }
-
-// fn generic_txm(manifest_builder: ManifestBuilder) -> ManifestBuilder {
-//     manifest_builder
-//         .lock_fee_from_faucet()
-//         .create_proof_from_account_of_non_fungible(
-//             user_account_address,
-//             NonFungibleGlobalId::new(
-//                 helper.market.cdp_resource_address,
-//                 NonFungibleLocalId::Integer(cdp_id.into()),
-//             ),
-//         )
-//         .pop_from_auth_zone("cdp_proof")
-//         .withdraw_from_account(user_account_address, res_address, amount)
-//         .take_all_from_worktop(res_address, "res_buket");
-
-//     manifest_builder
-// }
-// fn generic_cdp_txm() {}

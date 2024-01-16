@@ -81,6 +81,9 @@ pub mod single_resource_pool {
 
         /// Ratio between the pool unit and the pooled token
         unit_to_asset_ratio: PreciseDecimal,
+
+        ///
+        res_divisibility: u8,
     }
 
     impl SingleResourcePool {
@@ -103,11 +106,17 @@ pub mod single_resource_pool {
                 })
                 .create_with_no_initial_supply();
 
+            let res_divisibility = ResourceManager::from_address(pool_res_address)
+                .resource_type()
+                .divisibility()
+                .expect("Error while getting divisibility of the pool resource");
+
             let pool_component = Self {
                 liquidity: Vault::new(pool_res_address),
                 pool_unit_res_manager,
                 external_liquidity_amount: 0.into(),
                 unit_to_asset_ratio: 1.into(),
+                res_divisibility,
             }
             .instantiate();
 
@@ -215,7 +224,9 @@ pub mod single_resource_pool {
             let assets = self.liquidity.take_advanced(amount, withdraw_strategy);
 
             if withdraw_type == WithdrawType::ForTemporaryUse {
-                self.external_liquidity_amount += amount;
+                self.external_liquidity_amount += amount
+                    .checked_round(self.res_divisibility, RoundingMode::ToNearestMidpointToEven)
+                    .unwrap();
             } else {
                 self.unit_to_asset_ratio = self._get_unit_to_asset_ratio();
             }
@@ -247,7 +258,11 @@ pub mod single_resource_pool {
                 "External liquidity amount must not be negative!"
             );
 
-            self.external_liquidity_amount += amount;
+            let rounded_amount = amount
+                .checked_round(self.res_divisibility, RoundingMode::ToNearestMidpointToEven)
+                .unwrap();
+
+            self.external_liquidity_amount += rounded_amount;
 
             self.unit_to_asset_ratio = self._get_unit_to_asset_ratio();
         }
@@ -258,12 +273,17 @@ pub mod single_resource_pool {
                 amount >= 0.into(),
                 "External liquidity amount must not be negative!"
             );
+
+            let rounded_amount = amount
+                .checked_round(self.res_divisibility, RoundingMode::ToNearestMidpointToEven)
+                .unwrap();
+
             assert!(
-                amount <= self.external_liquidity_amount,
+                rounded_amount <= self.external_liquidity_amount,
                 "Provided amount is greater than the external liquidity amount!"
             );
 
-            self.external_liquidity_amount -= amount;
+            self.external_liquidity_amount -= rounded_amount;
 
             self.unit_to_asset_ratio = self._get_unit_to_asset_ratio();
         }

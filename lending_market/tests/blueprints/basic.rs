@@ -10,12 +10,12 @@ use std::path::Path;
 fn test_deposit_withdraw_borrow_repay() {
     let mut helper = TestHelper::new();
 
-    const T2022: i64 = 1640998800;
-    const T2023: i64 = 1672534800;
+    // const T2022: i64 = 1640998800;
+    // const T2023: i64 = 1672534800;
 
-    helper
-        .test_runner
-        .advance_to_round_at_timestamp(Round::of(1), T2022);
+    // helper
+    //     .test_runner
+    //     .advance_to_round_at_timestamp(Round::of(1), T2022);
 
     // SETUP A LP PROVIDER
 
@@ -115,9 +115,9 @@ fn test_deposit_withdraw_borrow_repay() {
     )
     .expect_commit_failure();
 
-    helper
-        .test_runner
-        .advance_to_round_at_timestamp(Round::of(2), T2023);
+    // helper
+    //     .test_runner
+    //     .advance_to_round_at_timestamp(Round::of(2), T2023);
 
     market_repay(
         &mut helper,
