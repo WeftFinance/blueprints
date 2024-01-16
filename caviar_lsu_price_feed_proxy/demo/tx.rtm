@@ -1,0 +1,3 @@
+CALL_METHOD Address("account_sim1c956qr3kxlgypxwst89j9yf24tjc7zxd4up38x37zr6q4jxdx9rhma") "lock_fee" Decimal("10");
+CALL_METHOD Address("component_sim1crzvh2cd59pnwfqkkre0rflfhshrhptkweyf7vzefw08u0l34vkj8t") "get_price" Address("resource_sim1t4ujcxxgv67nu5ttyefv3l09mgtgld840jr24nta7kkrt2yyhhk3c2");
+CALL_METHOD Address("account_sim1c956qr3kxlgypxwst89j9yf24tjc7zxd4up38x37zr6q4jxdx9rhma") "deposit_batch" Expression("ENTIRE_WORKTOP");
